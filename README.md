@@ -9,7 +9,7 @@
 
 **文章目录**
 
-![472463533124a2a7c22e76d63d90e56d.webp](https://file.cangku.moe/images/472463533124a2a7c22e76d63d90e56d.webp)
+![472463533124a2a7c22e76d63d90e56d.webp](https://file.cangku.moe/images/1c1df55ea189286a2a03e827ae331d6e.webp)
 
 
 ## 1. 背景
