@@ -124,6 +124,10 @@ IPFS 分享的核心原理是将文件上传到 IPFS 网络，然后通过文件
 
 ![f631379df3ecefe98fcdf4bb4c9e503a.webp](https://file.cangku.moe/images/f631379df3ecefe98fcdf4bb4c9e503a.webp)
 
+**60秒快速上传示例**
+![ipfs_upload_in_60s](https://github.com/user-attachments/assets/7f7c3a3e-9b57-4b92-a69e-cdd009a38888)
+
+
 注意直接上传到酸奶网盘的链接可能需要在 Crust 的 pins 中尝试固定才能被某些网关访问到，不确定的话可以直接使用下面这个公关网关：
 
 ```
