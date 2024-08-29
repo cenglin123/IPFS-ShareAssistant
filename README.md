@@ -11,7 +11,7 @@
 
 ![472463533124a2a7c22e76d63d90e56d.webp](https://file.cangku.moe/images/1c1df55ea189286a2a03e827ae331d6e.webp)
 
-演示视频：https://youtu.be/YRhFFHmqR54
+演示视频：[https://youtu.be/YRhFFHmqR54](https://youtu.be/Xof9kek1orU)
 
 ## 1. 背景
 
