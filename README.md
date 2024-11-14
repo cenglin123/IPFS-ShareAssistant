@@ -86,7 +86,7 @@ IPFS分享助手采用了直观的界面设计，主要分为以下几个部分:
 
 具体来说如下图所示
 
-![](https://img.picgo.net/2024/11/14/20241114135815e2f574e4b806acb0.png)
+![](https://img.picgo.net/2024/11/14/PixPin_2024-11-14_14-21-47d33a7fc76376b80d.jpg)
 
 点击【WebUI】打开 IPFS WebUI 可见已导入成功
 
