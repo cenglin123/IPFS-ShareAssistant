@@ -1,4 +1,219 @@
-# IPFS分享助手：IPFS资源分享的一站式解决方案
+# IPFS分享助手：IPFS资源分享的一站式解决方案-资源防炸链解决方案
 
-<h2 class="post-title-line-primary"> 摘要 </h2> <p> <br> </p> <p> 为应对当前网盘分享环境中 <strong> 恶意举报 </strong> <sup> [</sup> <a href="https://cangku.moe/archives/212735" target="_blank" rel="noreferrer noopener"> <sup> 7 </sup> </a> <sup>] </sup> <strong> </strong> 盛行的问题，本文推荐了一种基于 IPFS 的去中心化文件分享方法，并介绍了 <strong> IPFS 分享助手程序 </strong> 来简化操作流程。该程序集成了文件添加、CID 拉取、计算与转换、生成分享链接、固定到 Crust 等功能，可极大降低 IPFS 的使用门槛。文章还分享了一些 IPFS 资源分享的经验和技巧。通过具体使用案例，展示了程序在文件导入、链接生成、多文件聚合等方面的便利性。</p> <p> <br> </p> <p> 本文旨在为资源分享提供一个更安全、更便捷的解决方案，欢迎大家对本程序提出建议和改进意见。</p> <p> [collapse title = "重要更新记录"] </p> <p> 20240825-v1.1.0.4: 新增固定到 Crust 功能 </p> <p> 20240814-v1.0.9b: 新增网关测速功能 </p> <p> [/collapse] </p> <p style="text-align:center;"> <a class="btn btn-link" href="#a"> 点我跳转到程序下载部分 </a> </p> <p> <br> </p> <p> <strong> 文章目录 </strong> </p> <p style="text-align:center;"> <img src="https://file.cangku.moe/images/fa21e9a839c98cad3ffba736ffa81694.webp" class="fr-fic fr-dib" alt="fa21e9a839c98cad3ffba736ffa81694.webp"> </p> <p style="text-align:center;"> <br> </p> <p> <strong> 演示视频 </strong> </p> <p> [iframe] https://youtu.be/Xof9kek1orU [/iframe] </p> <p> 如果看不了油管视频，可以在 <a href="https://gw.w3ipfs.cn:10443/ipfs/bafybeihcklpldkgdo4j2vizolok2ajm6ku57vajyyfxj36unqvlzmx7zwm?filename=20240823-IPFS%E5%88%86%E4%BA%AB%E6%96%B9%E6%B3%95.mp4" target="_blank" rel="noreferrer noopener"> 备选线路 </a> 观看 </p> <p style="text-align:center;"> <a class="btn btn-link" href="#a"> 点我跳转到程序下载部分 </a> </p> <p> <br> </p> <h2 class="post-title-line-primary"> 1. 背景 </h2> <p> <br> </p> <p> 随着国内网盘审查越来越严格，传统的网盘分享方式都面临着被和谐的风险。同时，<a href="https://cangku.moe/archives/212735" target="_blank" rel="noreferrer noopener"> <strong> 某些恶意团体 </strong> </a> 通过举报等手段打击正常的资源分享行为，使得分享环境 <strong> 日益恶化 </strong>。在这样的背景下，探索更安全、更便捷的资源分享方式变得尤为重要。</p> <p> [collapse title = "某类团体的举报示例"] </p> <p style="text-align:center;"> <img src="https://file.cangku.moe/images/0e1a22e5d528e10a67e7e85eba22d1d2.gif" class="fr-fic fr-dib" alt="0e1a22e5d528e10a67e7e85eba22d1d2.gif" style="width:299px;"> </p> <p> [/collapse] </p> <p> <strong> IPFS </strong> (InterPlanetary File System) 作为一种去中心化的分布式文件系统，天然具有抗审查、多地保存等特性，为我们提供了一种资源安全分享的新思路。</p> <p> <br> </p> <h2 class="post-title-line-primary"> 2. 方法介绍：基于 IPFS 的去中心化分享 </h2> <p> <br> </p> <p> IPFS 分享的核心原理是将文件上传到 IPFS 网络，然后通过文件的哈希值 (CID) 来访问和下载。这种方式具有以下优势: </p> <p> <br> </p> <p> 1. <strong> 去中心化 </strong>：文件存储在分布式网络中，不依赖于单一服务器，无法举报，自然也难以被删除或封禁。</p> <p> 2. <strong> 内容寻址 </strong>：类似 BT 通过内容哈希（CID）而非位置来定位文件，保证了文件的完整性。</p> <p> 3. <strong> 矿工托管 </strong>：IPFS 存储矿工存储文件可以获取收益，能够保证资源的可用性 </p> <p> 4. <strong> 网关下载 </strong>：相比于同属去中心化的 BT ，IPFS 可以通过网关链接的方式让没有 IPFS 节点的普通下载者也能访问 IPFS 中的内容，并且 <strong> 以一个不低的速度进行下载（<span style="color:rgb(243,121,52);"> 10-20MB/s </span>）</strong> </p> <p> <br> </p> <p> [collapse title = "下载测速图"] </p> <p style="text-align:center;"> <img src="https://file.cangku.moe/images/009b0534b714a8d3dd3e2fc5ef53cac1.webp" class="fr-fic fr-dib" alt="472463533124a2a7c22e76d63d90e56d.webp"> </p> <p> [/collapse] </p> <p> <br> </p> <p> 当然，IPFS 也存在一些问题，如上传下载速度不稳定，使用相对复杂等。针对以上问题，本文提供了一个可以 <strong> <span style="color:rgb(209,72,65);"> 极大简化 IPFS 分享流程 </span> </strong> 的程序，旨在让 IPFS 分享变得更加简单易用。</p> <p> <br> </p> <h2 class="post-title-line-primary"> 3. 程序功能简介 </h2> <p> <br> </p> <p> 本程序集成了 <strong> IPFS 本地文件添加 </strong>、<strong> 已上链 CID 拉取 </strong>、<strong> 计算本地文件 CID 及 CID 格式转换 </strong>、<strong> 生成分享链接 </strong> 等分享相关一站式功能。主要包括: </p> <p> <br> </p> <p> 1. <strong> 把本地文件/文件夹添加到 IPFS </strong>：支持通过拖拽文件批量添加到本地的 IPFS 仓库 </p> <p> 2. <strong> 由 CID 从 IPFS 网络拉取文件 </strong>：可以把被 <strong> 多副本固定 </strong> 在 IPFS 网络中（行话叫 "<strong> 上链 </strong>"）的文件批量拉取到本地 </p> <p> 3. <strong> 分享链接生成 </strong>：根据 <strong> 网关+CID+文件名 </strong> 生成分享链接，<strong> 进行网关测速 </strong>，支持多种常见网关，可自定义网关。</p> <p> 4.<strong> IPFS 节点管理 </strong>：内置 IPFS 节点，无需额外安装，也可连接外部节点。</p> <p> 5. <strong> WebUI 文件管理 </strong>：可通过 WebUI 查看已上传文件列表，删除文件等，以及其他 IPFS desktop 的原生功能。</p> <p> 6. <strong> Crust 平台固定 </strong>：可以设置 Crust 平台的账号及签名来远程固定 CID 到 Crust 网络，也可以使用公共账号(无法导出固定信息)</p> <p> <br> </p> <h2 class="post-title-line-primary"> 4. GUI 设计与功能介绍 </h2> <p> <br> </p> <p> <img src="https://file.cangku.moe/images/d27c55cb5d6d11a2d244621f0d2ce254.webp" class="fr-fic fr-dib" alt="d27c55cb5d6d11a2d244621f0d2ce254.webp"> </p> <p> <br> </p> <p> 本程序的界面主要分为以下几个部分: </p> <p> <br> </p> <p> 1. <strong> 主输入区 </strong>：支持拖入文件/文件夹或者输入 CID 进行操作，可自定义文件名、设置导入目标位置等 </p> <p> 2. <strong> 配置选项区 </strong>：可以设置本地 IPFS 仓库的地址，导入后是否 <strong> 固定 </strong>、是否在关闭程序时 <strong> 自动最小化到任务栏图标 </strong>。</p> <p> 3. <strong> CID 计算器 </strong>：可以计算文件的 v0 、v1 格式的 CID ，把 v0 格式的 CID 转换为 v1 格式，或者计算文件在 <a href="https://cangku.moe/archives/212970" target="_blank" rel="noreferrer noopener"> 酸奶网盘 </a> 中的 v1 格式的 CID ，在程序主界面上有简易计算器，支持计算完成后 <strong> 一键填入主输入区 </strong> </p> <p> 4. <strong> 下载链接生成器 </strong>：可根据已选择的网关和当前主输入区中的内容 <strong> 生成下载链接 </strong> 并 <strong> 一键复制到剪贴板 </strong>，可以在程序目录下的 `modules/ipfs_gateway.txt` 中自定义网关。</p> <p> 5. <strong> 任务栏右键菜单 </strong>：勾选关闭时最小化到任务栏选项后，关闭程序时程序不会退出且会最小化到任务栏，任务栏图标右键菜单提供有【CID 计算器】和【IPFS WebUI】这两个选项。</p> <p> <br> </p> <h2 class="post-title-line-primary"> 5. 使用案例分享 </h2> <p> <br> </p> <h3 class="post-title-primary"> 5.1 导入文件并固定到本地 IPFS 中 </h3> <p> <br> </p> <p> 本程序具有和 IPFS desktop 类似的导入功能，支持拖入文件或文件夹添加到本地的 IPFS 仓库中 </p> <p> 具体如下图所示 </p> <p> <br> </p> <p> <img src="https://file.cangku.moe/images/e304cb7e2f4f23f6871e3c6059e0fd57.webp" class="fr-fic fr-dib" alt="e304cb7e2f4f23f6871e3c6059e0fd57.webp"> </p> <p> <br> </p> <p> 点击【IPFS WebUI】打开 WebUI 可见已导入成功 </p> <p> <br> </p> <p> <img src="https://file.cangku.moe/images/9c4850657c4b9f3342cda25cff55e3e7.webp" class="fr-fic fr-dib" alt="9c4850657c4b9f3342cda25cff55e3e7.webp"> </p> <p> <br> </p> <h3 class="post-title-primary"> 5.2 快速生成下载链接 </h3> <p> <br> </p> <p> 对于分享者来说，IPFS 下载链接的生成是一件比较麻烦的事情，IPFS 下载链接的格式为【网关+CID+文件名】，生成时除了网关需要选择，文件名为了在网址链接中有效，也需要进行编码，显得很繁琐。</p> <p> 针对此问题，本程序支持根据当前输入框中的内容快速生成下载链接，并自动对文件名进行编码。</p> <p> <br> </p> <p> <img src="https://file.cangku.moe/images/3cc65b33ff821922baa0f62464c487ef.webp" class="fr-fic fr-dib" alt="3cc65b33ff821922baa0f62464c487ef.webp"> </p> <p> <br> </p> <p> 在程序同路径下的 `modules/ipfs_gateway.txt` 文件中内置了 <strong> 23 </strong> 个常见的网关供选择，如有需要也可以自行在文件中添加其他自定义网关，添加后重启程序即可。</p> <p> <br> </p> <h3 class="post-title-primary"> 5.3 根据 CID 聚合多文件到一个文件夹 </h3> <p> <br> </p> <p> 由于 <strong> Crust </strong> <sup> [</sup> <a href="https://cangku.moe/archives/212812" target="_blank" rel="noreferrer noopener"> <sup> 1 </sup> </a> <sup>, </sup> <a href="https://cangku.moe/archives/213010" target="_blank" rel="noreferrer noopener"> <sup> 2 </sup> </a> <sup>] </sup> 等 IPFS 平台等上传大于 1GB 的文件时效率较低，通常推荐采用多次分批上传，获取 CID 后分别导入到一个文件夹中，然后再在 Crust 等平台中采用下单或固定（PIN）文件夹整体 CID 的方式让文件可以被网关访问。在这个操作中导入文件是很费时间的，在不使用命令行的情况下是一件非常繁琐的事情。</p> <p> 针对这个问题，本程序支持把 CID 批量输入到主输入框，然后指定文件名，设置导入路径，点击【导入】即可一键快速导入。</p> <p> 更进一步，确认文件全部上链（上传到 Crust 网络并被矿工固定产生副本）以后，可以直接通过 CID 简易计算器直接算出 CID 然后填写到主输入框中，快速导入。</p> <p> <br> </p> <p> <img src="https://file.cangku.moe/images/e063ded1680ede106866f450327e9c19.webp" class="fr-fic fr-dib" alt="e063ded1680ede106866f450327e9c19.webp"> </p> <p> <br> </p> <p> 点击【IPFS WebUI】打开 WebUI 可见已导入成功 </p> <p> <br> </p> <p> <img src="https://file.cangku.moe/images/2665dc5d091f883391b361ed0bacb029.webp" class="fr-fic fr-dib" alt="2665dc5d091f883391b361ed0bacb029.webp"> </p> <p> <br> </p> <h3 class="post-title-primary"> 5.4 使用酸奶网盘实现类秒传分享 </h3> <p> <br> </p> <p> <a href="https://cangku.moe/archives/212970" target="_blank" rel="noreferrer noopener"> 酸奶网盘 </a> <sup> [3] </sup> 是一个国人团队开发的基于 Crust 矿工托管的 IPFS 网盘，相比于 <a href="https://crustfiles.io/files/" target="_blank" rel="noreferrer noopener"> <strong> Crust Files </strong> </a>，酸奶网盘可以批量上传文件， 并辅助进行固定，以避免 Crust Files 网络阻塞造成的上传失败问题。</p> <p>(2024.08.13 开始酸奶网盘已统一使用正式的 CID v1，移除此前的酸奶网盘格式 CID v1 转换功能)</p> <p> 在算出 CID 以后，可以直接根据 CID 生成下载链接立刻发布（<strong> <span style="color:rgb(243,121,52);"> 即使文件仍在上传中 </span> </strong>），由此达成 <strong> <span style="color:rgb(209,72,65);"> 类似秒传 </span> </strong> 的分享方式，增加效率。</p> <p> <br> </p> <p> <img src="https://file.cangku.moe/images/f631379df3ecefe98fcdf4bb4c9e503a.webp" class="fr-fic fr-dib" alt="f631379df3ecefe98fcdf4bb4c9e503a.webp"> </p> <p> <br> </p> <p> [collapse title = "60 秒快速上传演示"] </p> <p> <img src="https://gw.w3ipfs.cn:10443/ipfs/Qmamw7uCyxfP2VUDCjggg2kp2obLsN8cGAa4Cq5VoeeK8r?filename=ipfs_upload_in_60s.gif" class="fr-fic fr-dib" alt="Qmamw7uCyxfP2VUDCjggg2kp2obLsN8cGAa4Cq5VoeeK8r?filename=ipfs_upload_in_60s.gif"> </p> <p> [/collapse] </p> <p> <br> </p> <p> 注意直接上传到酸奶网盘的链接可能需要在 Crust 的 pins 中尝试固定才能被某些网关访问到，想快速发布的话可以直接使用下面这 2 个公关网关：</p> <p> <br> </p> <p> [code] </p> <pre> https://gw.w3ipfs.cn: 10443/ipfs/
-https://gw.w3ipfs.com: 7443/ipfs/</pre> <p> [/code] </p> <p> <br> </p> <p> 为了能让其他网关也能访问，需要在 Crust 上进行 pin 操作，关于 pin 操作，详见 <a href="https://cangku.moe/archives/213010" target="_blank" rel="noreferrer noopener"> <strong> 此文章 3.2 节 Pins 的使用方法 </strong> </a> <sup> [2] </sup> </p> <p> <br> </p> <h2 class="post-title-line-primary"> 6. 经验与技巧分享 </h2> <p> <br> </p> <h3 class="post-title-primary"> 6.1 选择合适的文件大小 </h3> <p> <br> </p> <p> 虽然 IPFS 理论上支持任意大小的文件，但考虑到上传和上链效率，建议将大文件拆分为 <strong> <span style="color:rgb(209,72,65);"> 1GB </span> </strong> 左右的小文件（这也是 <a href="https://crustfiles.io/files/" target="_blank" rel="noreferrer noopener"> <strong> Crust Files </strong> </a> 可上传的最大体积）。可以使用压缩软件进行分卷压缩然后逐个上传。</p> <p> <br> </p> <h3 class="post-title-primary"> 6.2 使用多个网关 </h3> <p> <br> </p> <p> 为了提高下载成功率和速度，建议在分享时提供多个公共网关的链接。IPFS 分享助手已内置了常用的网关，也可以在程序同路径下的 modules/ipfs_gateway.txt 文件中添加自己信任的网关。</p> <p> <br> </p> <h3 class="post-title-primary"> 6.3 注意文件名敏感性 </h3> <p> <br> </p> <p> 虽然目前 IPFS 本身不会审查文件内容，但某些网关可能会过滤敏感词（比如今后的酸奶网盘的网关）。因此在上传时，可以考虑对文件名进行简单处理，如使用缩写等，必要时可以采用 <a href="https://cangku.moe/archives/211602" target="_blank" rel="noreferrer noopener"> 隐写文件 </a> <sup> [6] </sup> 。</p> <p> <br> </p> <h3 class="post-title-primary"> 6.4 结合加密使用 </h3> <p> <br> </p> <p> 由于 IPFS 不能保证彻底删除文件（这是其抗审查能力的体现），对于敏感度较高的文件，如果需要上传到 IPFS ，可以先进行加密再上传。这样即使文件被他人下载，没有密钥也无法查看内容。</p> <p> <br> </p> <h2 class="post-title-line-primary"> 7. 不足与展望 </h2> <p> <br> </p> <p> 目前的程序测试仍不充分，已解决的主要问题有：</p> <p> 1. IPFS 本地端口被代理错误地转发到服务端的问题 </p> <p> 2. 在程序中集成 Crust 的 PIN 功能，可以导入后在 Crust 中进行固定 </p> <p> 3. 增加网关的 Ping 功能，自动检查网关的可用性 </p> <p> <br> </p> <p> 今后的开发计划：</p> <p> 1. 更新中...</p> <p> <br> </p> <h2 class="post-title-line-primary"> 8. 总结 </h2> <p> <br> </p> <p> IPFS 作为一种去中心化的文件分享方案，为我们应对 <strong> 网盘审查 </strong> 和 <strong> 资源倒卖者的恶意举报 </strong> 提供了新的思路。本文介绍的 IPFS 分享助手程序通过简化操作流程，大大降低了 IPFS 的使用门槛，使更多人能便捷地使用这一技术。程序集成了文件添加、CID 操作、链接生成等多项功能，并通过具体案例展示了其在实际使用中的优势。目前程序仍存在一些待解决的问题，未来将继续迭代优化，如集成 Crust 的 PIN 功能、增加网关可用性检查等。关于此方面欢迎大家多提意见。</p> <p> 随着操作难度的降低，IPFS 在资源分享领域有望有更广泛的应用，也欢迎更多人参与到 IPFS 生态的建设中来，共同探索更安全、更高效的分享方式。</p> <p> <br> </p> <p> <a name="a"> </a> </p> <h2 class="post-title-line-primary"> 9. Release </h2> <p> <br> </p> <p> [dlbox title = "IPFSShareAssistant" time = "20240810" info = "提取：6666 / 密码：6666" from = "" link1 = "百度|https://pan.baidu.com/s/1Ufe9vvE-RdPGUML1_1jy3A?pwd = 6666" link2 = "Github Release|https://github.com/cenglin123/IPFS-ShareAssistant/releases"] [/dlbox] </p> <p> <br> </p> <h2 class="post-title-line-primary"> 10. Virustotal 查毒报告 </h2> <p> <br> </p> <p> <img src="https://file.cangku.moe/images/22755ba1cbb41f66315ab4459f78af5d.webp" class="fr-fic fr-dib" alt="22755ba1cbb41f66315ab4459f78af5d.webp"> </p> <p> https://www.virustotal.com/gui/file/94a5472e0b8eca235ee1f47474a4731234e81e2ac27e9d01ba2c243fd2866dab?nocache = 1 </p> <p> <br> </p> <h2 class="post-title-line-primary"> 参考 </h2> <p> <br> </p> <p> [1] <a href="https://cangku.moe/archives/212812" target="_blank" rel="noreferrer noopener"> [技巧分享] [IPFS] 无法被举报的文件分享神器 CRUST IPFS 操作指南 PART.I </a> </p> <p> [2] <a href="https://cangku.moe/archives/213010" target="_blank" rel="noreferrer noopener"> [技巧分享] [IPFS] 无法被举报的文件分享神器 CRUST IPFS 操作指南 PART.II </a> </p> <p> [3] <a href="https://cangku.moe/archives/212970" target="_blank" rel="noreferrer noopener"> [技巧分享] [IPFS] 基于 CRUST IPFS 的防举报网盘 </a> </p> <p> [4] <a href="https://cangku.moe/archives/212530" target="_blank" rel="noreferrer noopener"> [技巧分享] IPFS 分享资源快速上手及其适用场景浅议 [资源防炸链解决方案] </a> </p> <p> [5] <a href="https://cangku.moe/archives/213012" target="_blank" rel="noreferrer noopener"> [技巧分享] [IPFS] 图床教程：分享使用 IPFS 白嫖图床的办法 </a> </p> <p> [6] <a href="https://cangku.moe/archives/211602" target="_blank" rel="noreferrer noopener"> [工具分享] 隐写者：把资源嵌入 MP4 文件的隐写工具 [资源防炸链解决方案倡议&规避网盘审查技巧探讨] </a> </p> <p> [7] <a href="https://cangku.moe/archives/212735" target="_blank" rel="noreferrer noopener"> [技巧分享] 如何应对资源倒卖者（倒狗）的举报 - 百度云篇 [资源防炸链解决方案倡议] </a> </p> <p> <br> </p> <h2 class="post-title-line-primary"> 免责声明 </h2> <p> <br> </p> <p> 本程序仅用于学习和研究 IPFS 技术，请勿用于任何非法用途。请遵守所在地区的相关法律法规，如有违反后果自负。</p> <p> <br> </p>
+## 摘要
+
+为应对当前网盘分享环境中 [**恶意举报**](https://cangku.moe/archives/212735) 盛行的问题，本文推荐了一种基于 [**IPFS**](https://cangku.moe/archives/212530)[4] 的去中心化文件分享方法，并介绍了 **IPFS 分享助手程序**来简化操作流程。该程序集成了文件添加、CID 拉取、计算与转换、生成分享链接、固定到 Crust 等功能，可极大降低 IPFS 的使用门槛。文章还分享了一些 IPFS 资源分享的经验和技巧。通过具体使用案例，展示了程序在文件导入、链接生成、多文件聚合等方面的便利性。
+
+本文旨在为资源分享提供一个更安全、更便捷的解决方案，欢迎大家对本程序提出建议和改进意见。
+
+**v1.1.3 更新 [20241023]**
+
+1. 新增 700 多个备用公共网关放到 modules/ipfs_gateway_side.txt 中，除了 modules/ipfs_gatewa.txt 中的主要网关，每次加载网关还会随机从备用网关里面抽取 50 个一起测速并显示。（网关来源：https://www.bilibili.com/video/BV1ZF1iYUEpM）
+2. 测速完成后可以一键复制 CID 及所有可用的网关
+3. 调整了 kubo 更新的逻辑，可以设置是否自动更新kubo
+
+**文章目录**
+![](https://img.picgo.net/2024/11/14/PixPin_2024-11-14_13-55-20b0cc05ba70f7d0ad.jpg)
+
+**演示视频**
+
+20240826 IPFS下载和上传入门教程 简单版03
+
+https://www.youtube.com/embed/Xof9kek1orU
+
+如果看不了油管视频，可以在 [备选线路](https://eth.sucks/ipfs/bafybeietvf3b44xlecktxegyutdwtedse42qriv7tisc4c7nzhmloqdq6i?filename=1.mp4) 观看
+
+## 1. 背景
+
+随着国内网盘审查越来越严格，传统的分享方式都面临着被和谐的风险。同时，某些恶意团体通过脚本举报等手段打击正常的资源分享行为，使得分享环境日益恶化。在这样的背景下，探索更安全、更便捷的资源分享方式变得尤为重要。
+
+IPFS (InterPlanetary File System) 作为一种去中心化的分布式文件系统，天然具有抗审查、异地保存等特性，为我们提供了一种新的资源分享思路。
+
+某类团体的举报示例
+
+![d2bd0944ab81361be363f8750db2bb0d9bf110a66ae8cb0f](https://github.com/user-attachments/assets/84bad21a-671d-4abf-b11b-319955e158a4)
+
+
+示例
+
+![](https://file.cangku.moe/images/b36ba3c62f26fac2558692baf04ee694.webp)
+
+## 2. 方法介绍：基于IPFS的去中心化分享
+
+IPFS 分享的核心原理是将文件上传到 IPFS 网络，然后通过文件的哈希值(CID)来访问和下载。这种方式具有以下优势:
+
+1. **去中心化**：文件存储在分布式网络中，不依赖于单一服务器，无法举报，自然也难以被删除或封禁。
+2. **内容寻址**：通过内容哈希而非位置来定位文件，保证了文件的完整性。
+3. **矿工托管**：IPFS 存储矿工存储文件可以获取收益，能够保证资源的可用性
+4. **网关下载**：相比于同属去中心化的 BT ，IPFS 可以通过网关链接的方式让没有 IPFS 节点的普通下载者也能访问 IPFS 中的内容，并且以一个不低的速度进行下载（10-20MB/s）
+
+当然，IPFS 也存在一些问题，如上传下载速度不稳定，使用相对复杂等。针对此问题，本文提供了一个可以极大简化 IPFS 分享流程的程序，IPFS 分享助手，旨在让IPFS分享变得更加简单易用。
+
+## 3. 程序功能简介
+
+本程序集成了 **IPFS 本地文件添加**、**已上链 CID 拉取**、**计算本地文件 CID 及 CID 格式转换**、**生成分享链接**等分享相关一站式功能。主要包括:
+
+
+1. **把本地文件/文件夹添加到 IPFS**：支持通过拖拽文件批量添加到本地的 IPFS 仓库
+
+2. **由 CID 从 IPFS 网络拉取文件**：可以把被**多副本固定**在 IPFS 网络中（行话叫"**上链**"）的文件批量拉取到本地
+
+3. **分享链接生成**：根据**网关+CID+文件名**生成分享链接，**进行网关测速**，支持多种常见网关，可自定义网关。
+
+4. **IPFS 节点管理**：内置 IPFS 节点，无需额外安装，也可连接外部节点。
+
+5. **WebUI 文件管理**：可通过 WebUI 查看已上传文件列表，删除文件等，以及其他 IPFS desktop 的原生功能。
+
+6. **Crust 平台固定**：可以设置 Crust 平台的账号及签名来远程固定 CID 到 Crust 网络，也可以使用公共账号(无法导出固定信息)
+
+## 4. GUI设计与功能介绍
+
+![](https://img.picgo.net/2024/11/14/20241114135736c139ceb518b9387e.png)
+
+IPFS分享助手采用了直观的界面设计，主要分为以下几个部分:
+
+1. **主输入区**：支持拖入文件/文件夹或者输入 CID 进行操作，可自定义文件名、设置导入目标位置等
+2. **配置选项区**：可以设置本地 IPFS 仓库的地址，导入后是否**固定**、是否在关闭程序时**自动最小化任务栏图标**。
+3. **CID 计算器**：可以计算文件的 v0 、v1 格式的 CID ，把 v0 格式的 CID 转换为 v1 格式，或者计算文件在酸奶网盘中的 v1 格式的 CID ，在程序主界面上有简易计算器，支持计算完成后一键填入主输入区
+4. **下载链接生成器**：可根据已选择的网关和当前主输入区中的内容**生成下载链接**并**一键复制到剪贴板**，可以在程序目录下的 `modules/ipfs_gateway.txt` 中自定义网关。
+5. **任务栏右键菜单**：勾选关闭时最小化到任务栏选项后，关闭程序时程序不会退出且会最小化到任务栏，任务栏图标右键菜单提供有【高级计算器及Crust Pinner】和【IPFS WebUI】这两个选项。
+
+## 5. 使用案例分享
+
+### 5.1 导入文件并固定到本地 IPFS 中
+
+本程序具有和 IPFS desktop 类似的导入功能，支持拖入文件或文件夹添加到本地的 IPFS 仓库中
+
+具体来说如下图所示
+
+![](https://img.picgo.net/2024/11/14/20241114135815e2f574e4b806acb0.png)
+
+点击【WebUI】打开 IPFS WebUI 可见已导入成功
+
+![](https://img.picgo.net/2024/11/14/20241114135835e6c6497361d4ec4f.png)
+
+### 5.2 快速生成下载链接
+
+对于分享者来说，IPFS 下载链接的生成是一件比较麻烦的事情，IPFS 下载链接的格式为【网关+CID+文件名】，生成时除了网关需要选择，为了让文件名在网址链接中有效，也需要进行编码，显得很繁琐。
+
+针对此问题，本程序支持根据当前输入框中的内容快速生成下载链接，并自动对文件名进行编码。
+
+具体操作如下图：
+
+![](https://img.picgo.net/2024/11/14/202411141358500e64df80bc989bf9.png)
+
+本程序在程序同路径下的 `modules/ipfs_gateway.txt` 文件中内置了若干常见的网关供选择，如有需要也可以自行在文件中添加其他自定义网关，添加后点击【重置下载链接】即可重新加载网关。
+
+### 5.3 CID 各网关测速及网关负载均衡
+
+由于 IPFS 网关的状态并不总是稳定，对于需要批量生成下载链接的情况，如果持续使用同一个网关生成大量链接，可能会导致该网关的响应时间变慢，甚至过载。通过启用网关负载均衡，可以将不同的 CID 分配到不同的网关上，优化访问速度和资源分配。
+
+勾选右下角配置选项中的【启用下载链接生成器的网关负载均衡功能】，便可自动对网关进行分配。具体而言：
+  
+1. **轮询负载均衡**：当测速结果不足或未开启测速功能时，程序会依照用户当前选定的网关，并按顺序轮询可用的其他网关，将 CID 分配给不同的网关，以减少某个网关的负担。
+
+未开启负载均衡：
+
+![](https://img.picgo.net/2024/11/14/20241114135905d965f799f1585c46.png)
+
+开启负载均衡
+
+![](https://img.picgo.net/2024/11/14/20241114135919ec2f9fb511074799.png)
+
+2. **网关测速结果**：程序还在 `modules/ipfs_gateway_side.txt` 中设置有 700 多个次选网关，每次加载网关时除了自选网关以外，也会随机抽取 50 个次选网关，和主网关一起进行网关测速。如果进行了网关测速，程序会记录每个 CID 的最佳网关（测速速度最快的网关）。当多次生成同一个 CID 的链接时，优先选择该最佳网关。
+
+通过此方法，即便在大批量链接生成的情况下，也能提高链接的生成速度和稳定性，有效降低单一网关过载的风险。
+
+### 5.4 根据 CID 快速聚合多文件到一个文件夹
+
+由于 **Crust**[1](https://cangku.moe/archives/212812), [2](https://cangku.moe/archives/213010) 等 IPFS 平台等上传大于 1GB 的文件时效率较低，通常推荐采用多次分批上传，获取 CID 后分别导入到一个文件夹中，然后再在 Crust 等平台中采用下单或固定（PIN）文件夹整体 CID ，或者自己做种的方式让文件可以被网关访问。在这个操作中导入文件是很费时间的，在不使用命令行的情况下是一件非常繁琐的事情。
+
+针对这个问题，本程序支持把 CID 批量输入到主输入框，然后指定文件名，设置导入路径，点击【导入】即可一键快速导入。
+
+更进一步，确认文件全部上链（上传到 Crust 网络并被矿工固定产生副本）以后，可以直接通过 CID 简易计算器直接算出 CID 然后填写到主输入框中，快速导入。
+
+![](https://file.cangku.moe/images/eeb24b345653ae8ad5c4f401131413eb.webp)
+
+点击【WebUI】打开 WebUI 可见已导入成功
+
+![](https://file.cangku.moe/images/d8deec293beba769ef4a5f1fda361609.webp)
+
+### 5.5 使用酸奶网盘实现类秒传的分享方式
+
+[酸奶网盘](https://cangku.moe/archives/212970)[3] 是一个国人团队开发的基于 Crust 矿工托管的 IPFS 网盘，相比于 [**Crust Files**](https://crustfiles.io/files/)，酸奶网盘可以批量上传文件， 并辅助进行固定，以避免 Crust Files 网络阻塞造成的上传失败问题。
+
+(2024.08.13 开始酸奶网盘已统一使用正式的 CID v1，移除此前的酸奶网盘格式 CID v1 转换功能)
+
+在算出 CID 以后，可以直接根据 CID 生成下载链接立刻发布（**即使文件仍在上传中**），由此达成**类似秒传**的分享方式，增加效率。
+
+
+## 6. 经验与技巧分享
+
+### 6.1 选择合适的文件大小
+
+虽然 IPFS 理论上支持任意大小的文件，但考虑到上传和传播效率，建议将大文件拆分为 1GB 左右的小文件（这也是 Crust Files 可上传的最大体积）。可以使用压缩软件进行分卷压缩，然后逐个上传，最后使用 5.4 节中的方法聚合 CID 到文件夹然后发布。发布时最好也同时把内容文件的 CID 一并给出，防止因为文件夹 CID 因为每人做种而丢失聚合。
+
+### 6.2 使用多个网关
+
+为了提高下载成功率和速度，建议在分享时提供多个公共网关的链接，对于批量分享的分卷，建议启用网关负载均衡功能，把下载链接分摊给不同的网关。IPFS分享助手已内置了常用的网关，你也可以添加自己信任的网关。
+
+### 6.4 IPFS 对抗恶意举报和网络攻击时的细节
+
+虽然目前 IPFS 本身不会审查文件内容，但某些网关可能会（比如 `eth.sucks` 这个网关）。因此在上传时，可以考虑对文件名进行简单处理，如使用缩写等，必要时可以采用隐写文件。
+
+此外如果处于极端环境下（即为了对抗恶意举报或网络攻击而使用 IPFS 的情况），则不建议使用带网关的下载链接，而是仅分享 CID 来防止可能的对于特定网关的举报或者攻击。
+
+### 6.5 隐私问题：结合加密使用
+
+由于 IPFS 不能阻止知道 CID 的人访问文件，也不能保证彻底删除文件（这是其抗审查能力的体现），对于敏感度较高的文件，如果需要上传到 IPFS ，可以先进行加密再上传。这样即使文件被他人下载，没有密钥也无法查看内容。
+
+## 7. 不足与展望
+
+目前的程序测试仍不充分，已解决的主要问题有：
+1. IPFS 本地端口被代理错误地转发到服务端的问题
+2. 在程序中集成 Crust 的 PIN 功能，可以在导入后在 Crust 中进行固定
+3. 增加网关测速功能，自动检查网关的可用性
+4. 增加网关负载均衡功能
+
+今后的开发计划：
+1. 更新中...
+
+## 8. 总结
+
+IPFS 作为一种去中心化的文件分享方案，为我们应对网盘审查和恶意举报提供了新的思路。
+
+本文介绍的 IPFS 分享助手程序通过简化操作流程，大大降低了 IPFS 的使用门槛，使更多人能便捷地使用这一技术。程序集成了文件添加、CID 操作、链接生成等多项功能，并通过具体案例展示了其在实际使用中的优势。目前程序仍存在一些待解决的问题，未来将继续迭代优化，如集成 Crust 的 PIN 功能、增加网关可用性检查等。关于此方面也欢迎大家多提意见。
+
+随着操作难度的降低，IPFS 在资源分享领域有望有更广泛的应用，也欢迎更多人参与到 IPFS 生态的建设中来，共同探索更安全、更高效的分享方式。
+
+## 9. Release
+
+[在此处列出最新的版本发布信息]
+
+## 10. Virustotal查毒报告
+
+![](https://img.picgo.net/2024/11/14/20241114135959726fc8943d25fc33.png)
+
+https://www.virustotal.com/gui/file/94a5472e0b8eca235ee1f47474a4731234e81e2ac27e9d01ba2c243fd2866dab?nocache=1
+
+## 参考
+
+```
+[1] [[技巧分享] [IPFS] 无法被举报的文件分享神器 CRUST IPFS 操作指南 PART.I](https://cangku.moe/archives/212812)
+
+[2] [[技巧分享] [IPFS] 无法被举报的文件分享神器 CRUST IPFS 操作指南 PART.II](https://cangku.moe/archives/213010)
+
+[3] [[技巧分享] [IPFS] 基于 CRUST IPFS 的防举报网盘](https://cangku.moe/archives/212970)
+
+[4] [[技巧分享] IPFS 分享资源快速上手及其适用场景浅议 [资源防炸链解决方案]](https://cangku.moe/archives/212530)
+
+[5] [[技巧分享] [IPFS] 图床教程：分享使用 IPFS 白嫖图床的办法](https://cangku.moe/archives/213012)
+
+[6] [[工具分享] 隐写者：把资源嵌入 MP4 文件的隐写工具 [资源防炸链解决方案倡议&规避网盘审查技巧探讨]](https://cangku.moe/archives/211602)
+
+[7] [[技巧分享] 如何应对资源倒卖者（倒狗）的举报 - 百度云篇 [资源防炸链解决方案倡议]](https://cangku.moe/archives/212735)
+```
+
+## 免责声明
+
+本程序仅用于学习和研究 IPFS 技术，请勿用于任何非法用途。请遵守所在地区的相关法律法规，如有违反后果自负。
