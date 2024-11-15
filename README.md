@@ -2,7 +2,7 @@
 
 ## 摘要
 
-为应对当前网盘分享环境中 [**恶意举报**](https://github.com/cenglin123/SteganographierGUI) 盛行的问题，本文推荐了一种基于 [**IPFS**](https://github.com/cenglin123/IPFS-ShareAssistant)[4] 的去中心化文件分享方法，并介绍了 **IPFS 分享助手程序**来简化操作流程。该程序集成了文件添加、CID 拉取、计算与转换、生成分享链接、固定到 Crust 等功能，可极大降低 IPFS 的使用门槛。文章还分享了一些 IPFS 资源分享的经验和技巧。通过具体使用案例，展示了程序在文件导入、链接生成、多文件聚合等方面的便利性。
+为应对当前网盘分享环境中 [**恶意举报**](https://github.com/cenglin123/SteganographierGUI/wiki) 盛行的问题，本文推荐了一种基于 [**IPFS**](https://github.com/cenglin123/IPFS-ShareAssistant)[4] 的去中心化文件分享方法，并介绍了 **IPFS 分享助手程序**来简化操作流程。该程序集成了文件添加、CID 拉取、计算与转换、生成分享链接、固定到 Crust 等功能，可极大降低 IPFS 的使用门槛。文章还分享了一些 IPFS 资源分享的经验和技巧。通过具体使用案例，展示了程序在文件导入、链接生成、多文件聚合等方面的便利性。
 
 本文旨在为资源分享提供一个更安全、更便捷的解决方案，欢迎大家对本程序提出建议和改进意见。
 
