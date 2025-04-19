@@ -8,6 +8,14 @@
 
 IPFS 辅助油猴脚本：https://github.com/cenglin123/ipfs-cid-copy-helper
 
+**v1.1.7 更新 [20250419]**
+
+1. 修改按钮排布，使得结构更为合理
+2. 导入 CID 超时时长为 30s，超时视为出错，程序会提示哪些 CID 出错，并提供一键填写失败 CID 到主输入框的功能
+3. 导入 CID 时可以点击【下载网关测速】广播所有 CID 到公共网关，这样可以改善导入效率
+4. 下载链接生成器新增【获取更多网关】按钮，点击后，会自动获取当前 IPFS 节点的 gateway 端口（比如 8080），然后使用 http://k51qzi5uqu5djx3hvne57dwcotpc8h76o2ygrxh05kck11j6wnhvse8jrfzf2w.ipns.localhost:8080/ 通过本地网关访问网页
+5. 计算 CID 部分加入了 v0 v1 互转的功能
+
 **v1.1.5 更新 [20241114]**
 
 新增网关负载均衡功能
