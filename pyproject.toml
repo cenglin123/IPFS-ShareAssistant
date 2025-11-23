@@ -1,0 +1,12 @@
+[project]
+name = "test01-uv-for-venv"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp==3.11.13",
+    "aleph-client==1.7.0",
+    "psutil>=7.1.3",
+    "tkinterdnd2>=0.4.3",
+]
