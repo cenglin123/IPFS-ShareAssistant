@@ -1,4 +1,4 @@
-# src\ipfs_gui.py
+﻿# src\ipfs_gui.py
 
 import os
 import sys
@@ -101,11 +101,8 @@ import win32con
 import win32api
 import pywintypes
 import concurrent.futures
-import ctypes
 import random
 import shlex
-
-ctypes.windll.shcore.SetProcessDpiAwareness(1) # 设置DPI感知
 
 # 导入助手的标准模块（感兴趣你也可以自己定义一些模块，当然我更推荐用 py 脚本放到 plugins 目录下，然后通过插件启动器启动，更方便一些）
 from utils import EmbeddedKubo, IntegratedApp, save_config_file, IPFSCleaner
@@ -135,6 +132,7 @@ class IPFSApp:
         # 设置窗口和UI
         self._setup_window()
         self._create_main_ui()
+        self._bind_context_menus()
         
         # 设置窗口几何位置
         self._apply_window_geometry() 
@@ -199,6 +197,8 @@ class IPFSApp:
         self.runtime_python = self._resolve_runtime_python()
         self.runtime_pythonw = self._resolve_runtime_python(prefer_windowed=True)
         self.plugin_window = None
+        self.crust_window = None
+        self.aleph_window = None
 
         if self.runtime_python:
             self.logger.info(f"Runtime Python detected: {self.runtime_python}")
@@ -259,6 +259,7 @@ class IPFSApp:
         self.enable_balancer_var = tk.BooleanVar(value=self.config.get('enable_balancer_var', False))
         self.simple_mode = self.config.get('default_simple_mode', False)
         self.default_simple_mode = tk.BooleanVar(value=self.config.get('default_simple_mode', False)) # 复选框变量
+        self.gateway_var = tk.StringVar()
         
         self.importing = False
         self.stop_import = False
@@ -372,7 +373,7 @@ class IPFSApp:
     def _setup_window(self):
         """设置主窗口"""
         mode_text = " - 简洁模式" if self.simple_mode else ""
-        self.root.title(f"IPFS 分享助手 v1.2.0-20251117 by 层林尽染{mode_text}")
+        self.root.title(f"IPFS 分享助手 v1.2.2-20251130 by 层林尽染{mode_text}")
 
         # 窗口大小在 _apply_window_geometry 中设置
         
@@ -381,9 +382,8 @@ class IPFSApp:
         if os.path.exists(self.icon_path):
             self.root.iconbitmap(self.icon_path)
         
-        # 样式和DPI
+        # 样式
         self.set_global_style()
-        self.scale_factor = self.get_display_scaling()
 
     def set_global_style(self):
         """设置全局样式"""
@@ -409,16 +409,6 @@ class IPFSApp:
             return 'PingFang SC'
         else:
             return 'Noto Sans CJK SC'
-
-    def get_display_scaling(self):
-        """获取显示缩放比例"""
-        try:
-            hdc = win32api.GetDC(0)
-            dpi = win32api.GetDeviceCaps(hdc, win32con.LOGPIXELSX)
-            win32api.ReleaseDC(0, hdc)
-            return dpi / 96.0
-        except:
-            return 1.0
 
     # ==================== 3.UI创建 ====================
     
@@ -485,7 +475,7 @@ class IPFSApp:
         
         # CID输入
         ttk.Label(frame, text="1. a.输入CIDs从IPFS路径导入(每行一个)    或 b.拖入本地文件/文件夹从本地导入").pack(anchor="w")
-        cid_frame, self.cid_text_advanced = self._create_scrolled_text(frame, height=7)
+        cid_frame, self.cid_text_advanced = self._create_scrolled_text(frame, height=6)
         cid_frame.pack(fill="both", expand=True, pady=1)
         ttk.Label(frame, text="示例: bafybei...xf44 或 C:\\path\\to\\file.txt").pack(anchor="w")
         self.cid_text_advanced.drop_target_register(DND_FILES)
@@ -493,7 +483,7 @@ class IPFSApp:
         
         # 文件名输入
         ttk.Label(frame, text="2. 输入文件名 (每行一个)     或直接拖入文件获取文件名，在 1.b 中拖入本地文件时会自动填充文件名").pack(anchor="w", pady=(8, 0))
-        name_frame, self.name_text_advanced = self._create_scrolled_text(frame, height=7)
+        name_frame, self.name_text_advanced = self._create_scrolled_text(frame, height=6)
         name_frame.pack(fill="both", expand=True, pady=1)
         ttk.Label(frame, text="当输入为 CID 时与 CID 逐一对应, 若不指定文件名则默认以 CID 作为文件名, 示例: myfile.7z.006").pack(anchor="w")
         self.name_text_advanced.drop_target_register(DND_FILES)
@@ -636,7 +626,6 @@ class IPFSApp:
         gateway_frame = ttk.Frame(frame)
         gateway_frame.pack(fill="x", padx=5, pady=5)
         ttk.Label(gateway_frame, text="选择网关:").pack(side="left")
-        self.gateway_var = tk.StringVar()
         self.gateway_dropdown_advanced = ttk.Combobox(gateway_frame, textvariable=self.gateway_var, state="readonly")
         self.gateway_dropdown_advanced.pack(side="left", fill="x", expand=True)
         
@@ -670,14 +659,14 @@ class IPFSApp:
         ttk.Label(frame, text="输入需要计算CID的文件/文件夹路径或v0格式CID").pack(anchor="w")
         
         # 输入框
-        cid_input_frame, self.cid_input_text_advanced = self._create_scrolled_text(frame, height=8)
+        cid_input_frame, self.cid_input_text_advanced = self._create_scrolled_text(frame, height=7)
         cid_input_frame.pack(fill="x", pady=2)
         self.cid_input_text_advanced.drop_target_register(DND_FILES)
         self.cid_input_text_advanced.dnd_bind('<<Drop>>', self.drop_on_cid_calculator)
         
         # CID版本选择和Filecoin选项
         options_frame = ttk.Frame(frame)
-        options_frame.pack(fill="x", pady=5)
+        options_frame.pack(fill="x", pady=3)
         
         # CID版本选择
         version_frame = ttk.Frame(options_frame)
@@ -701,7 +690,7 @@ class IPFSApp:
         self._create_cid_calc_buttons(frame)
         
         # 输出框
-        cid_output_frame, self.cid_output_text_advanced = self._create_scrolled_text(frame, height=8)
+        cid_output_frame, self.cid_output_text_advanced = self._create_scrolled_text(frame, height=7)
         cid_output_frame.pack(fill="x", pady=2)
         
         # 状态栏
@@ -714,7 +703,7 @@ class IPFSApp:
     def _create_cid_calc_buttons(self, parent):
         """创建CID计算器按钮组"""
         button_frame = ttk.Frame(parent)
-        button_frame.pack(pady=5)
+        button_frame.pack(pady=3)
         
         self.cid_calc_button_gui_advanced = ttk.Button(button_frame, text="计算CID", width=10, command=self.calculate_cid_gui)
         self.cid_calc_button_gui_advanced.pack(side="left", padx=2, pady=5)
@@ -734,7 +723,7 @@ class IPFSApp:
     def _create_bottom_buttons(self, parent):
         """创建底部按钮区域"""
         button_frame = ttk.Frame(parent)
-        button_frame.pack(pady=10)
+        button_frame.pack(pady=5)
         
         # 第一排按钮
         button_row = ttk.Frame(button_frame)
@@ -906,7 +895,6 @@ class IPFSApp:
         gateway_frame.grid_columnconfigure(1, weight=1)
         
         ttk.Label(gateway_frame, text="选择网关:").grid(row=0, column=0, sticky="w", padx=(0, 5))
-        self.gateway_var = tk.StringVar()
         self.gateway_dropdown_simple = ttk.Combobox(
             gateway_frame,
             textvariable=self.gateway_var,
@@ -940,17 +928,17 @@ class IPFSApp:
             orient="horizontal",
             mode="determinate"
         )
-        self.progress_bar_simple.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+        self.progress_bar_simple.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
         self.progress_bar_simple['value'] = 0
         
         # 下载链接输出框（带内嵌标签）
         links_output_label_frame = ttk.Frame(links_frame)
-        links_output_label_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=(5, 10))
+        links_output_label_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=(5, 5))
         links_output_label_frame.grid_rowconfigure(1, weight=1)
         links_output_label_frame.grid_columnconfigure(0, weight=1)
         
         ttk.Label(links_output_label_frame, text="下载链接：").grid(row=0, column=0, sticky="w", pady=(0, 2))
-        links_output_frame, self.links_text_simple = self._create_scrolled_text(links_output_label_frame, height=5)
+        links_output_frame, self.links_text_simple = self._create_scrolled_text(links_output_label_frame, height=4)
         links_output_frame.grid(row=1, column=0, sticky="nsew")
 
     # ==================== 4.UI辅助方法 ====================
@@ -965,10 +953,18 @@ class IPFSApp:
         h_scrollbar = ttk.Scrollbar(frame, orient='horizontal')
         h_scrollbar.pack(side='bottom', fill='x')
         
-        text = tk.Text(frame, height=height, width=width, wrap='none',
-                      yscrollcommand=v_scrollbar.set,
-                      xscrollcommand=h_scrollbar.set)
+        text = tk.Text(
+            frame,
+            height=height,
+            width=width,
+            wrap='none',
+            yscrollcommand=v_scrollbar.set,
+            xscrollcommand=h_scrollbar.set,
+            undo=True,
+            autoseparators=True,
+        )
         text.pack(side='left', fill='both', expand=True)
+        self._attach_context_menu(text)
         
         v_scrollbar.config(command=text.yview)
         h_scrollbar.config(command=text.xview)
@@ -1011,7 +1007,7 @@ class IPFSApp:
                 if bbox:
                     content_height = bbox[3] - bbox[1]
                     canvas_height = canvas.winfo_height()
-                    buffer = 5 * self.scale_factor
+                    buffer = 5
                     
                     if content_height > canvas_height + buffer:
                         if not scrollbar.winfo_manager():
@@ -1089,16 +1085,115 @@ class IPFSApp:
         
         # 初始检查
         outer_frame.after(100, check_scrollbar_necessity)
-        
+
         return outer_frame, scrollable_frame
 
+    def _bind_context_menus(self):
+        """为输入部件绑定右键菜单"""
+        for cls in ("Text", "Entry", "TEntry", "TCombobox"):
+            try:
+                self.root.bind_class(cls, "<Button-3>", self._show_context_menu, add="+")
+            except Exception:
+                continue
+
+    def _attach_context_menu(self, widget):
+        """给指定部件挂载右键菜单（用于未走类绑定的部件）"""
+        try:
+            widget.bind("<Button-3>", self._show_context_menu, add="+")
+        except Exception:
+            pass
+
+    def _show_context_menu(self, event):
+        """显示剪切/复制/粘贴/全选菜单"""
+        widget = event.widget
+        try:
+            widget.focus_force()
+        except Exception:
+            pass
+
+        menu = getattr(widget, "_context_menu", None)
+        if not menu:
+            menu = tk.Menu(widget, tearoff=0)
+            menu.add_command(label="撤销(Ctrl+Z)", command=lambda w=widget: self._do_undo(w))
+            menu.add_command(label="重做(Ctrl+Y)", command=lambda w=widget: self._do_redo(w))
+            menu.add_separator()
+            menu.add_command(label="剪切(Ctrl+X)", command=lambda w=widget: w.event_generate("<<Cut>>"))
+            menu.add_command(label="复制(Ctrl+C)", command=lambda w=widget: w.event_generate("<<Copy>>"))
+            menu.add_command(label="粘贴(Ctrl+V)", command=lambda w=widget: w.event_generate("<<Paste>>"))
+            menu.add_command(label="删除(Delete)", command=lambda w=widget: self._delete_selection(w))
+            menu.add_separator()
+            menu.add_command(label="全选(Ctrl+A)", command=lambda w=widget: w.event_generate("<<SelectAll>>"))
+            widget._context_menu = menu
+
+        state = ""
+        try:
+            state = widget.cget("state")
+        except Exception:
+            pass
+        readonly = state in ("disabled", "readonly")
+
+        has_selection = False
+        try:
+            if isinstance(widget, tk.Text):
+                has_selection = bool(widget.tag_ranges("sel"))
+            else:
+                has_selection = bool(widget.selection_present())
+        except Exception:
+            has_selection = False
+
+        menu.entryconfig("撤销(Ctrl+Z)", state="normal" if not readonly else "disabled")
+        menu.entryconfig("重做(Ctrl+Y)", state="normal" if not readonly else "disabled")
+        menu.entryconfig("剪切(Ctrl+X)", state="normal" if (not readonly and has_selection) else "disabled")
+        menu.entryconfig("复制(Ctrl+C)", state="normal" if has_selection else "disabled")
+        menu.entryconfig("粘贴(Ctrl+V)", state="normal" if not readonly else "disabled")
+        menu.entryconfig("删除(Delete)", state="normal" if (not readonly and has_selection) else "disabled")
+        menu.entryconfig("全选(Ctrl+A)", state="normal")
+
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            try:
+                menu.grab_release()
+            except Exception:
+                pass
+        return "break"
+
+    def _delete_selection(self, widget):
+        """删除当前选中内容"""
+        try:
+            if isinstance(widget, tk.Text):
+                if widget.tag_ranges("sel"):
+                    widget.delete("sel.first", "sel.last")
+            else:
+                if widget.selection_present():
+                    start = widget.index("sel.first")
+                    end = widget.index("sel.last")
+                    widget.delete(start, end)
+        except Exception:
+            pass
+
+    def _do_undo(self, widget):
+        """撤销"""
+        try:
+            widget.event_generate("<<Undo>>")
+        except Exception:
+            pass
+
+    def _do_redo(self, widget):
+        """重做"""
+        for sequence in ("<<Redo>>", "<Control-y>"):
+            try:
+                widget.event_generate(sequence)
+                break
+            except Exception:
+                continue
     def toggle_mode(self):
         """切换简洁/高级模式（使用隐藏/显示而不是删除/重建）"""
         self.simple_mode = not self.simple_mode
         
         # 更新窗口标题
         mode_text = " - 简洁模式" if self.simple_mode else ""
-        self.root.title(f"IPFS 分享助手 v1.2.1-20251123 by 层林尽染{mode_text}")
+        self.root.title(f"IPFS 分享助手 v1.2.2-20251130 by 层林尽染{mode_text}")
 
         # 先解绑所有全局鼠标滚轮事件
         try:
@@ -1175,7 +1270,7 @@ class IPFSApp:
 
         # 计算高级模式的基础尺寸 (作为参照)
         ADVANCED_WIDTH = int(screen_width * 0.62)
-        ADVANCED_HEIGHT = int(screen_height * 0.817)
+        ADVANCED_HEIGHT = int(screen_height * 0.750)
         
         # 根据模式计算尺寸
         if self.simple_mode:
@@ -1184,7 +1279,7 @@ class IPFSApp:
             window_height = int(ADVANCED_HEIGHT * SIMPLE_SCALE_FACTOR)
             
             # 确保窗口不会小于设定的最小尺寸
-            min_w, min_h = 550, 800
+            min_w, min_h = 620, 700
             window_width = max(window_width, min_w)
             window_height = max(window_height, min_h)
             self.logger.info( f"Calculated simple mode size: {window_width}x{window_height}" )
@@ -1204,7 +1299,7 @@ class IPFSApp:
         
         # 重新设置最小尺寸
         if self.simple_mode:
-            self.root.minsize(550, 800)
+            self.root.minsize(620, 800)
         else:
             self.root.minsize(1210, 842)
             
@@ -1542,9 +1637,27 @@ class IPFSApp:
             
             new_values.sort(key=lambda x: "[最快网关" in x, reverse=True)
         
-        self.gateway_dropdown['values'] = new_values
+        # 同步两个模式的下拉框选项
+        for dropdown in (getattr(self, "gateway_dropdown_simple", None), getattr(self, "gateway_dropdown_advanced", None)):
+            if dropdown:
+                dropdown['values'] = new_values
+
         if new_values:
             self.gateway_var.set(new_values[0])
+
+        self._auto_generate_links_after_speed_test()
+
+    def _auto_generate_links_after_speed_test(self):
+        """测速完成后自动生成一次下载链接，确保最新网关即时生效"""
+        def generate():
+            try:
+                if self.simple_mode:
+                    self.generate_links_simple()
+                else:
+                    self.generate_links()
+            except Exception as exc:
+                self.logger.error(f"Auto generate links after speed test failed: {exc}")
+        self.root.after(0, generate)
 
     def _show_detailed_results(self, all_results):
         """显示详细测速结果"""
@@ -1609,7 +1722,7 @@ class IPFSApp:
             self.root.clipboard_append(text.strip())
             messagebox.showinfo("复制成功", "CID 和可用网关已复制到剪贴板")
         
-        tk.Button(window, text="复制 CID 和可用网关", command=copy_results).pack(pady=10)
+        tk.Button(window, text="复制 CID 和所有可用网关", command=copy_results).pack(pady=10)
 
     def start_speed_test_simple(self):
         """简洁模式：从CID输出框获取CID进行测速"""
@@ -2408,30 +2521,41 @@ class IPFSApp:
 
     def _execute_gc(self):
         """执行垃圾回收"""
+        success = False
+        unpinned = freed = 0
         try:
             cleaner = IPFSCleaner(
                 ipfs_path=self.kubo.kubo_path,
                 repo_path=self.repo_path,
                 logger=self.logger
             )
-            
+
             success, unpinned, freed = cleaner.clean_all(self.update_status_label)
-            
-            if success:
-                if unpinned > 0:
-                    msg = f"清理完成！\n解固定: {unpinned} 个\n释放空间: {IPFSCleaner.format_size(freed)}"
-                else:
-                    msg = f"垃圾回收完成！\n没有固定对象\n释放空间: {IPFSCleaner.format_size(freed)}"
-                messagebox.showinfo("完成", msg)
-            else:
-                raise Exception("清理过程发生错误")
-                
         except Exception as e:
             self.logger.error(f"GC error: {e}")
-            messagebox.showerror("错误", f"清理失败：{e}")
-        finally:
-            self.gc_button.config(state=tk.NORMAL)
-            self.update_status_label("清理完成")
+            self._call_ui(lambda: messagebox.showerror("错误", f"清理失败：{e}"))
+            self.update_status_label("清理失败")
+            self._call_ui(lambda: self.gc_button.config(state=tk.NORMAL))
+            return
+
+        def finish_ui():
+            try:
+                if success:
+                    if unpinned > 0:
+                        msg = f"清理完成！\n解固定: {unpinned} 个\n释放空间: {IPFSCleaner.format_size(freed)}"
+                    else:
+                        msg = f"垃圾回收完成！\n没有固定对象\n释放空间: {IPFSCleaner.format_size(freed)}"
+                    messagebox.showinfo("完成", msg)
+                else:
+                    raise Exception("清理过程发生错误，请检查 IPFS 仓库是否可用。")
+            except Exception as e:
+                self.logger.error(f"GC error: {e}")
+                messagebox.showerror("错误", f"清理失败：{e}")
+            finally:
+                self.gc_button.config(state=tk.NORMAL)
+                self.update_status_label("清理完成")
+
+        self._call_ui(finish_ui)
 
     def open_plugin_launcher(self):
         """插件启动器：列出 plugins 目录下的脚本并支持后台启动"""
@@ -2644,11 +2768,16 @@ class IPFSApp:
 
     def open_crust_pinner(self):
         """打开Crust Pinner """
-        # 禁用按钮防止多次点击
-        self.crust_pinner_button.config(state=tk.DISABLED)
+        # 若窗口已存在则直接聚焦
+        if self.crust_window and self.crust_window.winfo_exists():
+            self.crust_window.deiconify()
+            self.crust_window.lift()
+            self.crust_window.focus_force()
+            return
             
         # 创建窗口
         window = tk.Toplevel(self.root)
+        self.crust_window = window
         window.title("CID Calculator & Crust Pinning")
         if os.path.exists(self.icon_path):
             window.iconbitmap(self.icon_path)
@@ -2662,18 +2791,24 @@ class IPFSApp:
         # 定义窗口关闭回调
         def on_close():
             window.destroy()
-            self.crust_pinner_button.config(state=tk.NORMAL)
+            self.crust_window = None
 
         window.protocol("WM_DELETE_WINDOW", on_close)
 
     def open_aleph_manager(self):
         """打开集成的Aleph分享助手"""
-        
+        if self.aleph_window and self.aleph_window.winfo_exists():
+            self.aleph_window.deiconify()
+            self.aleph_window.lift()
+            self.aleph_window.focus_force()
+            return
+
         # 按需加载 Aleph 相关模块，避免程序启动时的副作用（如生成配置目录）
         from utils.aleph_integrated_app import AlephIntegratedApp
 
         # 创建子窗口
         window = tk.Toplevel(self.root)
+        self.aleph_window = window
         window.title("Aleph 分享助手 - 集成版")
         window.minsize(1000, 800)  # 设置最小尺寸
         
@@ -2699,16 +2834,10 @@ class IPFSApp:
         def on_close():
             """关闭窗口时恢复按钮状态"""
             window.destroy()
-            # 恢复主窗口中的Aleph按钮为可用状态
-            self.aleph_manager_button_simple.config(state=tk.NORMAL)
-            self.aleph_manager_button_advanced.config(state=tk.NORMAL)
+            self.aleph_window = None
         
         # 绑定窗口关闭事件
         window.protocol("WM_DELETE_WINDOW", on_close)
-        
-        # 禁用主窗口中的Aleph按钮，防止重复打开
-        self.aleph_manager_button_simple.config(state=tk.DISABLED)
-        self.aleph_manager_button_advanced.config(state=tk.DISABLED)
 
     def open_webui(self):
         """打开WebUI"""
@@ -2883,11 +3012,13 @@ class IPFSApp:
         # 创建菜单
         self.tray_menu = win32gui.CreatePopupMenu()
         win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 1, "打开主窗口")
-        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 2, "打开Crust Pinner")
-        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 3, "打开Aleph Pinner")
-        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 4, "IPFS WebUI")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 2, "IPFS WebUI")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 3, "执行 GC")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 4, "打开 Crust Pinner")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 5, "打开 Aleph Pinner")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 6, "打开插件启动器")
         win32gui.AppendMenu(self.tray_menu, win32con.MF_SEPARATOR, 0, "")
-        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 5, "退出")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 99, "退出")
         
         self.show_tray_icon()
 
@@ -2895,7 +3026,7 @@ class IPFSApp:
         """显示托盘图标"""
         if self.tray_icon:
             nid = (self.hwnd, 0, win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP,
-                   self.WM_TASKBAR, self.tray_icon, "IPFS分享助手 v1.2.1-20251123")
+                   self.WM_TASKBAR, self.tray_icon, "IPFS分享助手 v1.2.2-20251130")
             try:
                 win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, nid)
             except pywintypes.error as e:
@@ -2921,12 +3052,16 @@ class IPFSApp:
                 self.root.lift()
                 self.root.focus_force()
             elif cmd == 2:
-                self.open_crust_pinner()
-            elif cmd == 3:
-                self.open_aleph_manager()
-            elif cmd == 4:
                 self.open_webui()
+            elif cmd == 3:
+                self.start_gc()                
+            elif cmd == 4:
+                self.open_crust_pinner()
             elif cmd == 5:
+                self.open_aleph_manager()
+            elif cmd == 6:
+                self.open_plugin_launcher()                
+            elif cmd == 99:
                 self.exit_application()
             
             win32gui.PostMessage(hwnd, win32con.WM_NULL, 0, 0)
@@ -3026,11 +3161,20 @@ class IPFSApp:
             return percentage
         return None
 
+    def _call_ui(self, func, *args, **kwargs):
+        """确保在UI线程执行回调"""
+        if threading.current_thread() is threading.main_thread():
+            func(*args, **kwargs)
+        else:
+            self.root.after(0, lambda: func(*args, **kwargs))
+
     def update_status_label(self, text):
         """更新状态标签"""
         truncated = self.truncate_path(text)
-        self.status_label.config(text=truncated)
-        self.status_label.full_text = text
+        def update():
+            self.status_label.config(text=truncated)
+            self.status_label.full_text = text
+        self._call_ui(update)
 
     def _update_cid_status(self, text):
         """更新CID计算器状态"""

@@ -46,6 +46,55 @@ try:
 except ImportError:
     pass
 
+def _guess_runtime_python():
+    """
+    返回随应用打包的 runtime/python 可执行文件路径，若不存在返回 None
+    """
+    try:
+        if getattr(sys, 'frozen', False):
+            base_path = Path(sys.executable).resolve().parent
+        else:
+            base_path = Path(__file__).resolve().parents[2]
+            if base_path.name == "src" and (base_path / "utils").exists():
+                base_path = base_path.parent
+        # Windows 打包路径
+        candidate = base_path / "runtime" / ("python.exe" if os.name == "nt" else "python")
+        if candidate.exists():
+            return candidate
+        # 兼容类 Unix 打包路径
+        candidate = base_path / "runtime" / "bin" / "python"
+        if candidate.exists():
+            return candidate
+    except Exception:
+        return None
+    return None
+
+def _shorten_error(err):
+    """
+    压缩冗长的错误输出（尤其是带 Traceback 的网络错误），只保留关键信息。
+    """
+    if not err:
+        return err
+    # 去掉边框类字符行
+    lines = [l for l in err.splitlines() if l.strip() and not l.strip().startswith(("┌", "│", "└"))]
+    # 优先保留包含核心关键词的行
+    key_lines = [l for l in lines if ("BroadcastError" in l or "Unexpected HTTP response" in l or "Service Unavailable" in l)]
+    if key_lines:
+        return key_lines[0]
+    tb_lines = [l for l in lines if "Traceback" in l]
+    if tb_lines:
+        return tb_lines[0]
+    # 回退保留首行
+    return lines[0] if lines else err
+
+def _looks_network_error(err):
+    if not err:
+        return False
+    keys = ["Cannot connect", "ClientConnectorError", "TimeoutError", "ConnectionResetError", "Service Unavailable", "BroadcastError", "Unexpected HTTP response"]
+    if any(k in err for k in keys):
+        return True
+    return bool(re.search(r"\b5\d{2}\b", err))
+
 from utils import EmbeddedKubo
 
 # ==================== 全局环境配置 ====================
@@ -171,7 +220,7 @@ class NodeIntelligence:
         """
         if url not in self.stats:
             # 对于未知节点，给予一个默认分 (官方节点默认分更优，优先尝试)
-            return 400 if is_official else 800
+            return 500 if is_official else 800
             
         node = self.stats[url]
         base_latency = node.get("ema_latency", 1000)
@@ -184,15 +233,38 @@ class NodeIntelligence:
         stability_penalty = 1.0 + (fail_rate * 2.0) 
         
         # 2. 官方偏好权重 (Official Bias)
-        # 官方节点给予 0.8 的优惠系数，社区节点 1.0
-        # 这意味着社区节点必须比官方节点快 20% 以上，预测分才能打平
-        official_bias = 0.8 if is_official else 1.0
+        # 官方节点给予 0.9 的优惠系数，社区节点 1.0
+        # 略微降低对官方的偏好，便于在官方节点抖动时切换
+        official_bias = 0.9 if is_official else 1.0
         
         predicted_score = base_latency * stability_penalty * official_bias
         return predicted_score
 
 # ==================== 工具类 ====================
 def run_aleph_cli(args, input_text=None):
+    # 优先调用随应用打包的 runtime/python -m aleph_client，确保与插件一致
+    runtime_python = _guess_runtime_python()
+    if runtime_python and runtime_python.exists():
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+        proc = SubprocessHelper.run_command(
+            [str(runtime_python), "-m", "aleph_client"] + list(args),
+            input=input_text or "",
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",  # 避免控制台编码导致崩溃
+            env=env
+        )
+        final_stderr = proc.stderr or ""
+        ignore_keywords = ["Could not import library 'magic'", "Consider installing rusty-rlp", "No account type specified", "Detected ETH account"]
+        filtered_lines = [line for line in final_stderr.splitlines() if not any(keyword in line for keyword in ignore_keywords)]
+        final_stderr_cleaned = "\n".join(filtered_lines)
+        final_stderr_cleaned = _shorten_error(final_stderr_cleaned) if _looks_network_error(final_stderr_cleaned) else final_stderr_cleaned
+        return proc.stdout or "", final_stderr_cleaned, proc.returncode
+
+    # 回退方案：在当前解释器内用 runpy 运行 aleph_client
     stdout_buf = io.StringIO()
     stderr_buf = io.StringIO()
     stdin_buf = io.StringIO(input_text) if input_text is not None else io.StringIO("")
@@ -516,12 +588,15 @@ class AlephManager:
         
         self.api_endpoints = list(Constants.ALEPH_API_ENDPOINTS)
         self.active_api_endpoint = None
+        self.last_success_endpoint = None
                 
         self.config_manager = AlephConfigManager(app_path, logger)
         self.config_manager.ensure_config_directory()
         
         # 初始化学习模块
         self.intelligence = NodeIntelligence(self.config_manager.config_dir, logger)
+        # 读取路由状态（记忆上次成功节点）
+        self._load_router_state()
         
         self.account_indices = {}
         self.unlinked_indices = {}
@@ -643,9 +718,9 @@ class AlephManager:
                 success = False
                 try:
                     start = time.time()
-                    requests.get(f"{url}/api/v0/info/public.json", timeout=2)
+                    resp = requests.get(f"{url}/api/v0/info/public.json", timeout=2)
                     latency = (time.time() - start) * 1000
-                    success = True
+                    success = resp.status_code == 200
                 except:
                     pass
                 
@@ -781,39 +856,101 @@ class AlephManager:
         try: self.master.after(0, _ui)
         except: pass
 
+    def _router_state_path(self):
+        return os.path.join(self.config_manager.config_dir, "router_state.json")
+
+    def _load_router_state(self):
+        try:
+            path = self._router_state_path()
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.last_success_endpoint = data.get("last_success_endpoint")
+        except Exception as exc:
+            self.logger.warning(f"读取路由状态失败: {exc}")
+
+    def _save_router_state(self):
+        try:
+            path = self._router_state_path()
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"last_success_endpoint": self.last_success_endpoint}, f)
+        except Exception as exc:
+            self.logger.warning(f"保存路由状态失败: {exc}")
+
     def run_aleph_command(self, cmd, input_text=None):
         self.log(f"执行: {cmd}")
         args = cmd.split() if isinstance(cmd, str) else list(cmd)
-        endpoints = self.api_endpoints or [None]
+        # 基于历史成功的节点做轮替，优先尝试最近成功节点
+        ordered = list(self.api_endpoints or [])
+        if self.last_success_endpoint:
+            le = None if self.last_success_endpoint == "default" else self.last_success_endpoint
+            if le in ordered:
+                ordered = [le] + [e for e in ordered if e != le]
+            elif le:
+                ordered = [le] + ordered
+
+        # 在已有列表末尾追加一个 None，让 aleph_client 使用其内置默认节点（官方负载均衡）作为兜底
+        endpoints = ordered + [None]
+        last_err = ""
+        # 外层尝试两轮，防止偶发 503 导致全军覆没
+        for attempt in range(2):
+            for idx, ep in enumerate(endpoints, 1):
+                start_ts = time.time()
+                if ep:
+                    # 设置所有可能的环境变量
+                    os.environ["ALEPH_API_SERVER"] = ep
+                    os.environ["ALEPH_API_HOST"] = ep
+                    os.environ["ALEPH_API_URL"] = ep
+                    self.active_api_endpoint = ep
+                else: 
+                    # 清理之
+                    os.environ.pop("ALEPH_API_SERVER", None)
+                    os.environ.pop("ALEPH_API_HOST", None)
+                    os.environ.pop("ALEPH_API_URL", None)
+                    self.active_api_endpoint = None
+                
+                out, err, rc = run_aleph_cli(args, input_text)
+                last_err = err
+
+                # 记录一次真实调用的成功/失败，用于学习评分（用户体验直接驱动）
+                try:
+                    elapsed_ms = max((time.time() - start_ts) * 1000, 1)
+                    is_success = (rc == 0 and not self._is_network_error(err))
+                    node_name = "Official" if ep in Constants.ALEPH_API_ENDPOINTS else ("Default" if ep is None else "Custom")
+                    self.intelligence.record_observation(ep or "default", elapsed_ms, is_success, name=node_name)
+                except Exception:
+                    pass
+
+                if rc == 0 or not self._is_network_error(err):
+                    if rc == 0:
+                        self.last_success_endpoint = ep or "default"
+                        self._save_router_state()
+                        self.log(f"成功节点: {ep or '默认'}")
+                    if out and "--json" not in args: self.log(f"输出: {out}")
+                    if err: self.log(f"信息: {_shorten_error(err)}")
+                    return out, err, rc
+                
+                # 网络错误则尝试下一个节点，同时记录失败原因
+                fail_msg = f"[{idx}/{len(endpoints)}] 节点 {ep or '默认'} 失败: {_shorten_error(err) or '无错误输出'}"
+                self.log(fail_msg)
+                
+                if idx < len(endpoints): time.sleep(1)
+            # 一轮失败后再等一秒重试一轮
+            time.sleep(1)
         
-        for idx, ep in enumerate(endpoints, 1):
-            if ep:
-                # 设置所有可能的环境变量
-                os.environ["ALEPH_API_SERVER"] = ep
-                os.environ["ALEPH_API_HOST"] = ep
-                os.environ["ALEPH_API_URL"] = ep
-                self.active_api_endpoint = ep
-            else: 
-                # 清理之
-                os.environ.pop("ALEPH_API_SERVER", None)
-                os.environ.pop("ALEPH_API_HOST", None)
-                os.environ.pop("ALEPH_API_URL", None)
-                self.active_api_endpoint = None
-            
-            out, err, rc = run_aleph_cli(args, input_text)
-            if rc == 0 or not self._is_network_error(err):
-                if out and "--json" not in args: self.log(f"输出: {out}")
-                if err: self.log(f"信息: {err}")
-                return out, err, rc
-            
-            if idx < len(endpoints): time.sleep(1)
-            else: self.log("所有节点连接失败")
+        self.log(f"所有节点连接失败，最后错误: {_shorten_error(last_err) or '无'}")
         return "", "", 1
 
     def _is_network_error(self, err):
-        if not err: return False
-        keys = ["Cannot connect", "ClientConnectorError", "TimeoutError", "ConnectionResetError"]
-        return any(k in err for k in keys)
+        if not err:
+            # 没有错误输出但返回码非0，也按网络类处理以触发回退
+            return True
+        keys = ["Cannot connect", "ClientConnectorError", "TimeoutError", "ConnectionResetError", "Service Unavailable", "BroadcastError", "Unexpected HTTP response"]
+        if any(k in err for k in keys):
+            return True
+        # 捕获 5xx HTTP 响应
+        return bool(re.search(r"\b5\d{2}\b", err))
 
     # 业务方法封装
     def create_account(self):
