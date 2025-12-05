@@ -106,6 +106,7 @@ import shlex
 
 # 导入助手的标准模块（感兴趣你也可以自己定义一些模块，当然我更推荐用 py 脚本放到 plugins 目录下，然后通过插件启动器启动，更方便一些）
 from utils import EmbeddedKubo, IntegratedApp, save_config_file, IPFSCleaner
+from utils.filecoin_pin_uploader import FilecoinPinUploader
 
 # 程序路径处理
 application_path = BASE_DIR
@@ -199,6 +200,7 @@ class IPFSApp:
         self.plugin_window = None
         self.crust_window = None
         self.aleph_window = None
+        self.filecoin_window = None
 
         if self.runtime_python:
             self.logger.info(f"Runtime Python detected: {self.runtime_python}")
@@ -373,7 +375,7 @@ class IPFSApp:
     def _setup_window(self):
         """设置主窗口"""
         mode_text = " - 简洁模式" if self.simple_mode else ""
-        self.root.title(f"IPFS 分享助手 v1.2.2-20251130 by 层林尽染{mode_text}")
+        self.root.title(f"IPFS 分享助手 v1.2.3-20251204 by 层林尽染{mode_text}")
 
         # 窗口大小在 _apply_window_geometry 中设置
         
@@ -729,13 +731,6 @@ class IPFSApp:
         button_row = ttk.Frame(button_frame)
         button_row.pack(fill="x")
         
-        # 保存按钮引用到实例变量
-        self.crust_pinner_button = ttk.Button(button_row, text="Crust", command=self.open_crust_pinner, width=9)
-        self.crust_pinner_button.pack(side="left", padx=2)
-
-        self.aleph_manager_button_advanced  = ttk.Button(button_row, text="Aleph", command=self.open_aleph_manager, width=9)
-        self.aleph_manager_button_advanced.pack(side="left", padx=2)
-
         self.plugin_launcher_button = ttk.Button(button_row, text="插件启动器", command=self.open_plugin_launcher, width=9)
         self.plugin_launcher_button.pack(side="left", padx=2)
         
@@ -747,6 +742,16 @@ class IPFSApp:
         
         self.clear_button_bottom = ttk.Button(button_row, text="程序复位", command=self.clear_window, width=9)
         self.clear_button_bottom.pack(side="left", padx=2)
+
+        # Crust/Aleph/Filecoin 放在同一排，宽度略缩
+        self.crust_pinner_button = ttk.Button(button_row, text="Crust", command=self.open_crust_pinner, width=8)
+        self.crust_pinner_button.pack(side="left", padx=2)
+
+        self.aleph_manager_button_advanced  = ttk.Button(button_row, text="Aleph", command=self.open_aleph_manager, width=8)
+        self.aleph_manager_button_advanced.pack(side="left", padx=2)
+
+        self.filecoin_button_advanced = ttk.Button(button_row, text="Filecoin", command=self.open_filecoin_uploader, width=8)
+        self.filecoin_button_advanced.pack(side="left", padx=2)
 
     def _create_status_bar(self):
         """创建状态栏"""
@@ -845,19 +850,22 @@ class IPFSApp:
         calc_button_frame = ttk.Frame(cid_calc_frame)
         calc_button_frame.grid(row=3, column=0, sticky="w", padx=10, pady=3)
         
-        self.cid_calc_button_gui_simple = ttk.Button(calc_button_frame, text="计算CID", command=self.calculate_cid_gui, width=12)
+        self.cid_calc_button_gui_simple = ttk.Button(calc_button_frame, text="计算CID", command=self.calculate_cid_gui, width=9)
         self.cid_calc_button_gui_simple.pack(side="left", padx=2)
         
-        self.copy_cid_button = ttk.Button(calc_button_frame, text="复制CID", command=self.copy_cids, width=12)
+        self.copy_cid_button = ttk.Button(calc_button_frame, text="复制CID", command=self.copy_cids, width=9)
         self.copy_cid_button.pack(side="left", padx=2)
 
-        self.webui_button_advanced = ttk.Button(calc_button_frame, text="WebUI", command=self.open_webui, width=12)
+        self.webui_button_advanced = ttk.Button(calc_button_frame, text="WebUI", command=self.open_webui, width=9)
         self.webui_button_advanced.pack(side="left", padx=2)
 
-        self.aleph_manager_button_simple  = ttk.Button(calc_button_frame, text="Aleph", command=self.open_aleph_manager, width=12)
+        self.aleph_manager_button_simple  = ttk.Button(calc_button_frame, text="Aleph", command=self.open_aleph_manager, width=9)
         self.aleph_manager_button_simple.pack(side="left", padx=2)
 
-        self.reset_cid_calc_button_gui = ttk.Button(calc_button_frame, text="重置计算器", command=self.clear_cid_calculator_gui, width=12)
+        self.filecoin_button_simple = ttk.Button(calc_button_frame, text="Filecoin", command=self.open_filecoin_uploader, width=9)
+        self.filecoin_button_simple.pack(side="left", padx=2)
+
+        self.reset_cid_calc_button_gui = ttk.Button(calc_button_frame, text="重置计算器", command=self.clear_cid_calculator_gui, width=9)
         self.reset_cid_calc_button_gui.pack(side="left", padx=2)
         
         # CID 输出框（带内嵌标签）
@@ -1193,7 +1201,7 @@ class IPFSApp:
         
         # 更新窗口标题
         mode_text = " - 简洁模式" if self.simple_mode else ""
-        self.root.title(f"IPFS 分享助手 v1.2.2-20251130 by 层林尽染{mode_text}")
+        self.root.title(f"IPFS 分享助手 v1.2.3-20251204 by 层林尽染{mode_text}")
 
         # 先解绑所有全局鼠标滚轮事件
         try:
@@ -1832,7 +1840,7 @@ class IPFSApp:
         if not cids:
             messagebox.showwarning("警告", "请先计算CID")
             return
-        
+
         # 获取对应的文件名
         inputs = self._get_text_lines(self.cid_input_text)
         names = []
@@ -1841,7 +1849,7 @@ class IPFSApp:
                 names.append(os.path.basename(input_item))
             else:
                 names.append(input_item)
-        
+
         # 补齐名称列表
         while len(names) < len(cids):
             names.append(cids[len(names)])
@@ -1854,36 +1862,68 @@ class IPFSApp:
             else:
                 cleaned_names.append(os.path.basename(name))
         names = cleaned_names
-        
-        # 获取当前网关
+
+        # 获取当前网关和可用网关列表
         current_gateway = self.gateway_var.get().split(' - ')[0]
+        available_gateways = [gw.split(' - ')[0] for gw in self.gateway_dropdown['values']]
+
         if not current_gateway:
             messagebox.showwarning("警告", "请选择网关")
             return
-        
+
+        # 确定网关使用策略（与高级模式相同）
+        if len(cids) == 1 or not self.enable_balancer_var.get():
+            gateways = [current_gateway]
+        elif hasattr(self, 'cid_best_gateways') and len(self.cid_best_gateways) > 1:
+            gateways = [self.cid_best_gateways.get(cid, current_gateway) for cid in cids]
+        else:
+            try:
+                idx = available_gateways.index(current_gateway)
+                gateways = available_gateways[idx:] + available_gateways[:idx]
+            except ValueError:
+                gateways = available_gateways
+
         # 生成链接
         links = []
+        gateway_dist = {}
+        gateway_idx = 0
+
         for cid, name in zip(cids, names):
+            # 选择网关（与高级模式相同的逻辑）
+            if len(cids) == 1 or not self.enable_balancer_var.get():
+                gw = gateways[0]
+            elif hasattr(self, 'cid_best_gateways') and len(self.cid_best_gateways) > 1:
+                gw = self.cid_best_gateways.get(cid, gateways[gateway_idx % len(gateways)])
+            else:
+                gw = gateways[gateway_idx % len(gateways)]
+                gateway_idx += 1
+
+            gateway_dist[gw] = gateway_dist.get(gw, 0) + 1
+
             is_ipns = cid.startswith('k51')
             prefix = 'ipns' if is_ipns else 'ipfs'
-            
+
             if is_ipns or not name or name == cid:
-                link = f"{current_gateway}/{prefix}/{cid}"
+                link = f"{gw}/{prefix}/{cid}"
             else:
-                link = f"{current_gateway}/{prefix}/{cid}?filename={quote(name)}"
-            
+                link = f"{gw}/{prefix}/{cid}?filename={quote(name)}"
+
             links.append(link)
-        
+
         # 显示链接
         self.links_text.delete("1.0", tk.END)
         self.links_text.insert(tk.END, "\n".join(links))
-        
+
         # 更新状态
         ipns_count = sum(1 for l in links if '/ipns/' in l)
         status = f"已生成 {len(links)} 个下载链接"
         if ipns_count:
             status += f" (IPFS: {len(links) - ipns_count}, IPNS: {ipns_count})"
-        
+        if len(gateway_dist) > 1 and self.enable_balancer_var.get():
+            status += "\n网关分配情况："
+            for gw, count in gateway_dist.items():
+                status += f"\n{gw}: {count}个链接"
+
         self.update_status_label(status)
         self.logger.info(f"Generated {len(links)} links in simple mode")
 
@@ -2593,7 +2633,7 @@ class IPFSApp:
         doc_inner.pack(fill="both", expand=True, padx=5, pady=5)
         y_scroll = ttk.Scrollbar(doc_inner, orient="vertical")
         y_scroll.pack(side="right", fill="y")
-        self.plugin_doc_text = tk.Text(doc_inner, height=10, wrap="word", state=tk.DISABLED, yscrollcommand=y_scroll.set)
+        self.plugin_doc_text = tk.Text(doc_inner, height=15, wrap="word", state=tk.DISABLED, yscrollcommand=y_scroll.set)
         self.plugin_doc_text.pack(side="left", fill="both", expand=True)
         y_scroll.config(command=self.plugin_doc_text.yview)
 
@@ -2839,6 +2879,35 @@ class IPFSApp:
         # 绑定窗口关闭事件
         window.protocol("WM_DELETE_WINDOW", on_close)
 
+    def open_filecoin_uploader(self):
+        """打开 Filecoin 分块上传工具"""
+        if self.filecoin_window and self.filecoin_window.winfo_exists():
+            self.filecoin_window.deiconify()
+            self.filecoin_window.lift()
+            self.filecoin_window.focus_force()
+            return
+
+        window = tk.Toplevel(self.root)
+        self.filecoin_window = window
+        window.title("Filecoin Pin 上传助手")
+        window.minsize(980, 580)
+        fil_icon = os.path.join(self.app_path, "assets", "fil_uploader_favicon.ico")
+        icon_use = fil_icon if os.path.exists(fil_icon) else self.icon_path
+        if os.path.exists(icon_use):
+            try:
+                window.iconbitmap(icon_use)
+            except Exception:
+                pass
+
+        self.filecoin_uploader = FilecoinPinUploader(window, self)
+
+        def on_close():
+            window.destroy()
+            self.filecoin_window = None
+            self.filecoin_uploader = None
+
+        window.protocol("WM_DELETE_WINDOW", on_close)
+
     def open_webui(self):
         """打开WebUI"""
         parsed = urllib.parse.urlparse(self.actual_api_address)
@@ -2948,7 +3017,7 @@ class IPFSApp:
             self.cid_text_advanced.insert(tk.END, file)
             
             # 自动填充文件名
-            if self.name_text.get("1.0", tk.END).strip():
+            if self.name_text_advanced.get("1.0", tk.END).strip():
                 self.name_text_advanced.insert(tk.END, "\n")
             self.name_text_advanced.insert(tk.END, os.path.basename(file))
 
@@ -2956,7 +3025,7 @@ class IPFSApp:
         """文件名输入框拖放处理"""
         files = self.root.tk.splitlist(event.data)
         for file in files:
-            if self.name_text.get("1.0", tk.END).strip():
+            if self.name_text_advanced.get("1.0", tk.END).strip():
                 self.name_text_advanced.insert(tk.END, "\n")
             self.name_text_advanced.insert(tk.END, os.path.basename(file))
 
@@ -2966,7 +3035,7 @@ class IPFSApp:
         if files and os.path.isdir(files[0]):
             folder_name = '/' + os.path.basename(files[0])
             self.path_entry_advanced.delete("0", tk.END)
-            self.path_entry.insert(tk.END, folder_name)
+            self.path_entry_advanced.insert(tk.END, folder_name)
 
     def drop_on_cid_calculator(self, event):
         """CID计算器拖放处理"""
@@ -3014,9 +3083,10 @@ class IPFSApp:
         win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 1, "打开主窗口")
         win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 2, "IPFS WebUI")
         win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 3, "执行 GC")
-        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 4, "打开 Crust Pinner")
-        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 5, "打开 Aleph Pinner")
-        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 6, "打开插件启动器")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 4, "打开插件启动器")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 5, "打开 Crust Pinner")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 6, "打开 Aleph Pinner")
+        win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 7, "打开 Filecoin Uploader")
         win32gui.AppendMenu(self.tray_menu, win32con.MF_SEPARATOR, 0, "")
         win32gui.AppendMenu(self.tray_menu, win32con.MF_STRING, 99, "退出")
         
@@ -3026,7 +3096,7 @@ class IPFSApp:
         """显示托盘图标"""
         if self.tray_icon:
             nid = (self.hwnd, 0, win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP,
-                   self.WM_TASKBAR, self.tray_icon, "IPFS分享助手 v1.2.2-20251130")
+                   self.WM_TASKBAR, self.tray_icon, "IPFS分享助手 v1.2.3-20251204")
             try:
                 win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, nid)
             except pywintypes.error as e:
@@ -3056,11 +3126,13 @@ class IPFSApp:
             elif cmd == 3:
                 self.start_gc()                
             elif cmd == 4:
-                self.open_crust_pinner()
-            elif cmd == 5:
-                self.open_aleph_manager()
-            elif cmd == 6:
                 self.open_plugin_launcher()                
+            elif cmd == 5:
+                self.open_crust_pinner()
+            elif cmd == 6:
+                self.open_aleph_manager()
+            elif cmd == 7:
+                self.open_filecoin_uploader()    
             elif cmd == 99:
                 self.exit_application()
             
@@ -3205,7 +3277,6 @@ class IPFSApp:
         x = self.root.winfo_pointerx() + 25
         y = self.root.winfo_pointery() + 20
         self.tooltip.geometry(f"+{x}+{y}")
-
 
 def main():
     """主函数"""
