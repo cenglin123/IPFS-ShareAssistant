@@ -704,7 +704,7 @@ class CIDCalculator:
     def _calculate_file_cid(self, file_path):
         """计算文件或目录的CID"""
         cid_version_option = self.cid_version.get()
-        
+
         # 根据选项决定初始计算的版本
         # value=2: file -> v0 -> v1，先算 v0
         # value=3: file -> v1 -> v0，先算 v1
@@ -716,31 +716,32 @@ class CIDCalculator:
             target_version = 1  # 先算v1，后面会转v0
         else:
             target_version = cid_version_option
-        
+
+        # --only-hash 模式不需要守护进程或网络访问，添加 --offline 避免加载 MFS
         command = [
-            self.ipfs_path, "add", "--only-hash", "-Q", 
-            "--repo-dir", self.repo_dir,
-            f"--cid-version={target_version}"
+            self.ipfs_path, "add", "--only-hash", "-Q", "--offline",
+            f"--cid-version={target_version}",
+            "--repo-dir", self.repo_dir
         ]
-        
+
         if os.path.isdir(file_path):
             command.append("-r")
-        
+
         # Chunker
-        chunker = (Constants.CHUNKER_FILECOIN if self.use_filecoin.get() 
+        chunker = (Constants.CHUNKER_FILECOIN if self.use_filecoin.get()
                   else Constants.CHUNKER_DEFAULT)
         command.extend(["--chunker", chunker])
         command.append(file_path)
-        
+
         self.logger.info(f"CID计算参数: filecoin={self.use_filecoin.get()}, "
                         f"chunker={chunker}, version={target_version}")
-        
+
         result = SubprocessHelper.run_command(command, timeout=Constants.DEFAULT_TIMEOUT)
-        
+
         if result.returncode != 0:
             self.logger.error(f"CID calculation failed: {result.stderr}")
             return None
-        
+
         return result.stdout.strip()
     
     

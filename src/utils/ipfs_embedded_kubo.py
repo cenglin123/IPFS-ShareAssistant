@@ -13,7 +13,7 @@ import platform
 import time
 import urllib.parse
 import psutil
-import shutil  # ★ 新增：用于删除临时目录等操作
+import shutil
 
 
 class EmbeddedKubo:

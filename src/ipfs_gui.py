@@ -85,7 +85,9 @@ for name in [".aleph-im", "logs", "plugins", "kubo"]:
 
 # 导入所需库
 import tkinter as tk
-from tkinter import messagebox, ttk, filedialog
+from tkinter import messagebox, filedialog, ttk
+# import ttkbootstrap as ttk
+# from ttkbootstrap.constants import *  # 可选，提供 PRIMARY, SUCCESS 等常量
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import subprocess
 import threading
@@ -169,6 +171,25 @@ class IPFSApp:
             "file -> v1 -> v0": 3
         }
         self.cid_version.set(version_map.get(selected_text, 1))  # 默认为1，即 CID v1
+
+    def open_app_root_directory(self):
+        """打开程序根目录"""
+        try:
+            if os.path.exists(self.app_path):
+                if os.name == 'nt':  # Windows
+                    os.startfile(self.app_path)
+                elif os.name == 'posix':  # macOS/Linux
+                    if sys.platform == 'darwin':
+                        subprocess.run(['open', self.app_path])
+                    else:
+                        subprocess.run(['xdg-open', self.app_path])
+                self.update_status_label(f"已打开程序根目录: {self.app_path}")
+                self.logger.info(f"Opened app root directory: {self.app_path}")
+            else:
+                messagebox.showwarning("警告", f"程序根目录不存在: {self.app_path}")
+        except Exception as e:
+            self.logger.error(f"打开程序根目录失败: {e}")
+            messagebox.showerror("错误", f"打开程序根目录失败: {e}")
 
     # ==================== 1.初始化方法 ====================
     
@@ -375,7 +396,7 @@ class IPFSApp:
     def _setup_window(self):
         """设置主窗口"""
         mode_text = " - 简洁模式" if self.simple_mode else ""
-        self.root.title(f"IPFS 分享助手 v1.2.3-20251204 by 层林尽染{mode_text}")
+        self.root.title(f"IPFS 分享助手 v1.2.4-20251221 by 层林尽染{mode_text}")
 
         # 窗口大小在 _apply_window_geometry 中设置
         
@@ -416,6 +437,9 @@ class IPFSApp:
     
     def _create_main_ui(self):
         """创建主界面"""
+        # 1. 先创建菜单栏（新增）
+        self._create_menu_bar()
+        
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
@@ -443,6 +467,337 @@ class IPFSApp:
         # 加载网关
         self.load_gateways()
 
+    def _create_menu_bar(self):
+        """创建菜单栏"""
+        self.menu_bar = tk.Menu(self.root)
+        self.root.config(menu=self.menu_bar)
+        
+        # ========== 文件菜单 ==========
+        file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="文件", menu=file_menu)
+        file_menu.add_command(label="读取 JSON 文件...", command=self.import_json_file_gui, accelerator="Ctrl+O")
+        file_menu.add_command(label="导出为 JSON 文件...", command=self.export_json_file_gui, accelerator="Ctrl+S")
+        file_menu.add_separator()
+        file_menu.add_command(label="打开程序根目录", command=self.open_app_root_directory)
+        file_menu.add_command(label="程序复位", command=self.clear_window, accelerator="Ctrl+R")
+        file_menu.add_separator()
+        file_menu.add_command(label="退出", command=self.exit_application, accelerator="Alt+F4")
+        
+        # ========== 工具菜单 ==========
+        tools_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="工具", menu=tools_menu)
+        tools_menu.add_command(label="IPFS WebUI", command=self.open_webui, accelerator="Ctrl+W")
+        tools_menu.add_command(label="执行 GC 清理", command=self.start_gc, accelerator="Ctrl+G")
+        tools_menu.add_separator()
+        tools_menu.add_command(label="重新加载网关", command=self.clear_links)
+        tools_menu.add_command(label="获取更多网关", command=self.open_gateway)
+        tools_menu.add_separator()
+        tools_menu.add_command(label="插件启动器...", command=self.open_plugin_launcher, accelerator="Ctrl+E")
+        
+        # ========== 托管服务菜单 ==========
+        services_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="托管服务", menu=services_menu)
+        services_menu.add_command(label="Crust Pinner", command=self.open_crust_pinner, accelerator="Ctrl+U")
+        services_menu.add_command(label="Aleph Pinner", command=self.open_aleph_manager, accelerator="Ctrl+L")
+        services_menu.add_command(label="Filecoin Uploader", command=self.open_filecoin_uploader, accelerator="Ctrl+F")
+        
+        # ========== 设置菜单 ==========
+        settings_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="设置", menu=settings_menu)
+        
+        # 复选项
+        settings_menu.add_checkbutton(label="导入后固定到本地", variable=self.pin_var)
+        settings_menu.add_checkbutton(label="关闭时最小化到托盘", variable=self.minimize_to_tray,
+                                    command=self.update_minimize_to_tray)
+        settings_menu.add_checkbutton(label="自动更新 Kubo", variable=self.auto_update_kubo,
+                                    command=self.update_auto_update_kubo)
+        settings_menu.add_separator()
+        settings_menu.add_checkbutton(label="启用网关负载均衡", variable=self.enable_balancer_var)
+        settings_menu.add_checkbutton(label="使用 Filecoin 参数 (chunker=size-1048576)", 
+                                    variable=self.use_filecoin,
+                                    command=self.update_filecoin_config)
+        settings_menu.add_separator()
+        settings_menu.add_checkbutton(label="默认使用简洁模式", variable=self.default_simple_mode,
+                                    command=self.update_default_simple_mode)
+        settings_menu.add_separator()
+        settings_menu.add_command(label="详细配置", command=self._open_config_dialog)
+        
+        # ========== 视图菜单 ==========
+        view_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="视图", menu=view_menu)
+        view_menu.add_command(label="切换简洁/高级模式", command=self.toggle_mode, accelerator="Ctrl+Q")
+        
+        # ========== 帮助菜单 ==========
+        help_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="帮助", menu=help_menu)
+        help_menu.add_command(label="访问 GitHub 主页", 
+                            command=lambda: webbrowser.open_new("https://github.com/cenglin123/IPFS-ShareAssistant"))
+        help_menu.add_separator()
+        help_menu.add_command(label="关于", command=self._show_about_dialog)
+        
+        # ========== 绑定快捷键 ==========
+        shortcuts = [
+            ('o', self.import_json_file_gui),
+            ('s', self.export_json_file_gui),
+            ('r', self.clear_window),
+            ('q', self.toggle_mode),
+            ('w', self.open_webui),
+            ('e', self.open_plugin_launcher),
+            ('u', self.open_crust_pinner),
+            ('l', self.open_aleph_manager),
+            ('f', self.open_filecoin_uploader),
+            ('g', self.start_gc),
+        ]
+
+        for key, func in shortcuts:
+            self.root.bind(f'<Control-{key}>', lambda e, f=func: f()) # 绑定小写
+            self.root.bind(f'<Control-{key.upper()}>', lambda e, f=func: f()) # 绑定大写
+
+    def _open_config_dialog(self):
+        """打开完整配置对话框（包含所有设置）"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("程序配置")
+        dialog.geometry("580x680")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        if os.path.exists(self.icon_path):
+            try:
+                dialog.iconbitmap(self.icon_path)
+            except:
+                pass
+        
+        # 居中显示
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() - 580) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - 580) // 2
+        dialog.geometry(f'+{x}+{y}')
+        
+        # 使用 Canvas + Scrollbar 实现滚动
+        canvas = tk.Canvas(dialog, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
+        
+        main_frame = ttk.Frame(canvas, padding=15)
+        
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        
+        canvas_window = canvas.create_window((0, 0), window=main_frame, anchor="nw")
+        
+        def on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+        
+        main_frame.bind("<Configure>", on_frame_configure)
+        canvas.bind("<Configure>", on_canvas_configure)
+        
+        # 鼠标滚轮支持
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", on_mousewheel))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        
+        # ==================== IPFS 路径配置 ====================
+        path_frame = ttk.LabelFrame(main_frame, text="IPFS 路径配置", padding=10)
+        path_frame.pack(fill="x", pady=(0, 10))
+        
+        # 仓库路径
+        ttk.Label(path_frame, text="IPFS 仓库路径:").pack(anchor="w", pady=(0, 3))
+        repo_row = ttk.Frame(path_frame)
+        repo_row.pack(fill="x", pady=(0, 10))
+        repo_entry = ttk.Entry(repo_row, width=50)
+        repo_entry.pack(side="left", fill="x", expand=True)
+        repo_entry.insert(0, self.repo_path)
+        ttk.Button(repo_row, text="浏览", width=6,
+                command=lambda: self._browse_path_for_entry(repo_entry)).pack(side="right", padx=(8, 0))
+        
+        # API 地址（带应用按钮）
+        ttk.Label(path_frame, text="IPFS API 地址:").pack(anchor="w", pady=(0, 3))
+        api_row = ttk.Frame(path_frame)
+        api_row.pack(fill="x", pady=(0, 10))
+        api_entry = ttk.Entry(api_row, width=50)
+        api_entry.pack(side="left", fill="x", expand=True)
+        api_entry.insert(0, self.actual_api_address or "")
+        
+        def apply_api():
+            new_api = api_entry.get().strip()
+            if new_api:
+                self.actual_api_address = new_api
+                if hasattr(self, 'api_entry_advanced'):
+                    self.api_entry_advanced.delete(0, tk.END)
+                    self.api_entry_advanced.insert(0, new_api)
+                self._update_config_display_labels()
+                self.save_main_config()
+                self.update_status_label(f"API 已应用: {new_api}")
+            else:
+                messagebox.showwarning("警告", "API 地址不能为空", parent=dialog)
+        
+        ttk.Button(api_row, text="应用", width=6, command=apply_api).pack(side="right", padx=(8, 0))
+        
+        # 代理设置（带应用按钮）
+        ttk.Label(path_frame, text="代理地址 (用于网关测速):").pack(anchor="w", pady=(0, 3))
+        proxy_row = ttk.Frame(path_frame)
+        proxy_row.pack(fill="x", pady=(0, 3))
+        proxy_entry = ttk.Entry(proxy_row, width=50)
+        proxy_entry.pack(side="left", fill="x", expand=True)
+        proxy_entry.insert(0, self.proxy or "")
+        
+        def apply_proxy():
+            new_proxy = proxy_entry.get().strip()
+            self.proxy = new_proxy if new_proxy else None
+            if hasattr(self, 'proxy_entry_advanced'):
+                self.proxy_entry_advanced.delete(0, tk.END)
+                self.proxy_entry_advanced.insert(0, self.proxy or "")
+            self._update_config_display_labels()
+            self.save_main_config()
+            if new_proxy:
+                self.update_status_label(f"代理已应用: {new_proxy}")
+            else:
+                self.update_status_label("代理已清除")
+        
+        ttk.Button(proxy_row, text="应用", width=6, command=apply_proxy).pack(side="right", padx=(8, 0))
+        
+        ttk.Label(path_frame, text="示例: http://127.0.0.1:7890 或 socks5://127.0.0.1:1080", 
+                foreground="gray", font=("", 9)).pack(anchor="w")
+        
+        # ==================== 导入选项 ====================
+        import_frame = ttk.LabelFrame(main_frame, text="导入选项", padding=10)
+        import_frame.pack(fill="x", pady=(0, 10))
+        
+        pin_var_temp = tk.BooleanVar(value=self.pin_var.get())
+        filecoin_var_temp = tk.BooleanVar(value=self.use_filecoin.get())
+        
+        ttk.Checkbutton(import_frame, text="导入后固定到本地 (Pin)", 
+                        variable=pin_var_temp).pack(anchor="w", pady=2)
+        ttk.Checkbutton(import_frame, text="使用 Filecoin 参数 (chunker=size-1048576)", 
+                        variable=filecoin_var_temp).pack(anchor="w", pady=2)
+        
+        # ==================== 网关与链接 ====================
+        gateway_frame = ttk.LabelFrame(main_frame, text="网关与链接", padding=10)
+        gateway_frame.pack(fill="x", pady=(0, 10))
+        
+        balancer_var_temp = tk.BooleanVar(value=self.enable_balancer_var.get())
+        
+        ttk.Checkbutton(gateway_frame, text="启用网关负载均衡 (多 CID 时分配不同网关)", 
+                        variable=balancer_var_temp).pack(anchor="w", pady=2)
+        
+        # ==================== 程序行为 ====================
+        behavior_frame = ttk.LabelFrame(main_frame, text="程序行为", padding=10)
+        behavior_frame.pack(fill="x", pady=(0, 10))
+        
+        minimize_var_temp = tk.BooleanVar(value=self.minimize_to_tray.get())
+        auto_update_var_temp = tk.BooleanVar(value=self.auto_update_kubo.get())
+        simple_mode_var_temp = tk.BooleanVar(value=self.default_simple_mode.get())
+        
+        ttk.Checkbutton(behavior_frame, text="关闭窗口时最小化到系统托盘", 
+                        variable=minimize_var_temp).pack(anchor="w", pady=2)
+        ttk.Checkbutton(behavior_frame, text="启动时自动检查 Kubo 更新", 
+                        variable=auto_update_var_temp).pack(anchor="w", pady=2)
+        ttk.Checkbutton(behavior_frame, text="默认使用简洁模式", 
+                        variable=simple_mode_var_temp).pack(anchor="w", pady=2)
+        
+        # ==================== 按钮区域 ====================
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill="x", pady=(15, 5))
+        
+        def save_and_close():
+            # 保存路径配置
+            self.repo_path = repo_entry.get().strip()
+            self.actual_api_address = api_entry.get().strip()
+            self.proxy = proxy_entry.get().strip() or None
+            
+            # 保存复选框配置
+            self.pin_var.set(pin_var_temp.get())
+            self.use_filecoin.set(filecoin_var_temp.get())
+            self.enable_balancer_var.set(balancer_var_temp.get())
+            self.minimize_to_tray.set(minimize_var_temp.get())
+            self.auto_update_kubo.set(auto_update_var_temp.get())
+            self.default_simple_mode.set(simple_mode_var_temp.get())
+            
+            # 同步隐藏的输入框
+            if hasattr(self, 'repo_entry_advanced'):
+                self.repo_entry_advanced.delete(0, tk.END)
+                self.repo_entry_advanced.insert(0, self.repo_path)
+            if hasattr(self, 'api_entry_advanced'):
+                self.api_entry_advanced.delete(0, tk.END)
+                self.api_entry_advanced.insert(0, self.actual_api_address)
+            if hasattr(self, 'proxy_entry_advanced'):
+                self.proxy_entry_advanced.delete(0, tk.END)
+                self.proxy_entry_advanced.insert(0, self.proxy or "")
+            
+            # 更新显示标签
+            self._update_config_display_labels()
+            
+            # 保存到文件
+            self.save_main_config()
+            
+            # 清理绑定
+            canvas.unbind_all("<MouseWheel>")
+            
+            self.logger.info("Configuration saved from dialog")
+            dialog.destroy()
+            self.update_status_label("所有配置已保存")
+        
+        def reset_to_default():
+            if messagebox.askyesno("确认", "确定要恢复所有设置为默认值吗？", parent=dialog):
+                pin_var_temp.set(False)
+                filecoin_var_temp.set(False)
+                balancer_var_temp.set(False)
+                minimize_var_temp.set(False)
+                auto_update_var_temp.set(False)
+                simple_mode_var_temp.set(False)
+        
+        ttk.Button(btn_frame, text="保存并关闭", command=save_and_close, width=12).pack(side="right", padx=(10, 0))
+        ttk.Button(btn_frame, text="取消", command=lambda: [canvas.unbind_all("<MouseWheel>"), dialog.destroy()], width=12).pack(side="right")
+        ttk.Button(btn_frame, text="恢复默认", command=reset_to_default, width=12).pack(side="left")
+        
+        # 窗口关闭时清理
+        def on_dialog_close():
+            canvas.unbind_all("<MouseWheel>")
+            dialog.destroy()
+        
+        dialog.protocol("WM_DELETE_WINDOW", on_dialog_close)
+
+    def _update_config_display_labels(self):
+        """更新配置区域的显示标签"""
+        if hasattr(self, 'config_repo_label'):
+            repo_display = self.truncate_path(self.repo_path, 45)
+            self.config_repo_label.config(text=f"📁 仓库: {repo_display}")
+        
+        if hasattr(self, 'config_api_label'):
+            self.config_api_label.config(text=f"🔗 API: {self.actual_api_address or '未设置'}")
+        
+        if hasattr(self, 'config_proxy_label'):
+            proxy_display = self.truncate_path(self.proxy, 45) if self.proxy else "未设置"
+            self.config_proxy_label.config(text=f"🌐 代理: {proxy_display}")
+
+    def _browse_path_for_entry(self, entry_widget):
+        """浏览并选择路径，填入指定的 Entry"""
+        current_path = entry_widget.get().strip()
+        initial_dir = current_path if os.path.isdir(current_path) else self.app_path
+        
+        path = filedialog.askdirectory(initialdir=initial_dir)
+        if path:
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, path)
+
+    def _show_about_dialog(self):
+        """显示关于对话框"""
+        about_text = (
+            "IPFS 分享助手 v1.2.4-20251221\n\n"
+            "作者: 层林尽染\n\n"
+            "GitHub:\n"
+            "github.com/cenglin123/IPFS-ShareAssistant\n\n"
+            "一个用于管理和分享 IPFS 文件的桌面工具\n"
+            "支持 CID 计算、网关测速、链接生成等功能"
+        )
+        messagebox.showinfo("关于", about_text)
+
     def _create_advanced_mode_ui_in_container(self):
         """在容器中创建高级模式界面"""
         # 左右分栏
@@ -467,8 +822,11 @@ class IPFSApp:
         # 主输入框区域
         self._create_main_inputs_section(scrollable_frame)
         
-        # 配置区域
+        # 配置区域（极简版）
         self._create_config_section(scrollable_frame)
+        
+        # 快捷工具按钮（从右侧移过来）
+        self._create_tool_buttons_section(scrollable_frame)
 
     def _create_main_inputs_section(self, parent):
         """创建主输入框区域"""
@@ -476,7 +834,7 @@ class IPFSApp:
         frame.pack(fill="both", expand=True, padx=20, pady=(10, 5))
         
         # CID输入
-        ttk.Label(frame, text="1. a.输入CIDs从IPFS路径导入(每行一个)    或 b.拖入本地文件/文件夹从本地导入").pack(anchor="w")
+        ttk.Label(frame, text="1. a.输入CIDs从IPFS路径导入(每行一个) 或 b.拖入本地文件/文件夹从本地导入").pack(anchor="w")
         cid_frame, self.cid_text_advanced = self._create_scrolled_text(frame, height=6)
         cid_frame.pack(fill="both", expand=True, pady=1)
         ttk.Label(frame, text="示例: bafybei...xf44 或 C:\\path\\to\\file.txt").pack(anchor="w")
@@ -484,7 +842,7 @@ class IPFSApp:
         self.cid_text_advanced.dnd_bind('<<Drop>>', self.drop_on_cid)
         
         # 文件名输入
-        ttk.Label(frame, text="2. 输入文件名 (每行一个)     或直接拖入文件获取文件名，在 1.b 中拖入本地文件时会自动填充文件名").pack(anchor="w", pady=(8, 0))
+        ttk.Label(frame, text="2. 输入文件名 (每行一个) 或直接拖入文件获取文件名").pack(anchor="w", pady=(8, 0))
         name_frame, self.name_text_advanced = self._create_scrolled_text(frame, height=6)
         name_frame.pack(fill="both", expand=True, pady=1)
         ttk.Label(frame, text="当输入为 CID 时与 CID 逐一对应, 若不指定文件名则默认以 CID 作为文件名, 示例: myfile.7z.006").pack(anchor="w")
@@ -520,98 +878,110 @@ class IPFSApp:
         self.clear_button_advanced.pack(side="left", padx=2, pady=5)
 
     def _create_config_section(self, parent):
-        """创建配置区域"""
+        """创建配置区域（极简版 - 所有配置移至弹窗）"""
         frame = ttk.LabelFrame(parent, text="CONFIG 配置", style='BigTitle.TLabelframe')
         frame.pack(fill="x", padx=20, pady=(5, 10))
         
-        # 仓库地址
-        ttk.Label(frame, text="4. IPFS 仓库地址:").pack(anchor="w", pady=(5, 0))
-        repo_frame = ttk.Frame(frame)
-        repo_frame.pack(fill="x", pady=2)
-        self.repo_entry_advanced = ttk.Entry(repo_frame)
-        self.repo_entry_advanced.pack(side="left", fill="x", expand=True)
-        self.repo_entry_advanced.insert(0, self.repo_path)
-        ttk.Button(repo_frame, text="浏览", command=self.browse_repo).pack(side="right")
-        ttk.Label(frame, text="默认为环境变量中的仓库地址, 可自行改动, 示例: C:\\Users\\xxx\\.ipfs").pack(anchor="w")
+        # 主要容器 - 使用网格布局
+        main_container = ttk.Frame(frame)
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # API地址
-        ttk.Label(frame, text="5. IPFS API 地址").pack(anchor="w", pady=(5, 0))
-        api_frame = ttk.Frame(frame)
-        api_frame.pack(fill="x", pady=2)
-        self.api_entry_advanced = ttk.Entry(api_frame)
-        self.api_entry_advanced.pack(side="left", fill="x", expand=True)
+        # 配置信息区域 (占用大部分空间)
+        info_frame = ttk.Frame(main_container)
+        info_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        
+        repo_display = self.truncate_path(self.repo_path, 40)
+        self.config_repo_label = ttk.Label(info_frame, text=f"📁 仓库: {repo_display}", foreground="#555")
+        self.config_repo_label.pack(anchor="w", pady=1)
+        
+        self.config_api_label = ttk.Label(info_frame, text=f"🔗 API: {self.actual_api_address or '未设置'}", foreground="#555")
+        self.config_api_label.pack(anchor="w", pady=1)
+        
+        proxy_display = self.truncate_path(self.proxy, 40) if self.proxy else "未设置"
+        self.config_proxy_label = ttk.Label(info_frame, text=f"🌐 代理: {proxy_display}", foreground="#555")
+        self.config_proxy_label.pack(anchor="w", pady=1)
+        
+        # 按钮区域 (右侧底部)
+        btn_container = ttk.Frame(main_container)
+        btn_container.grid(row=0, column=1, sticky="se")  # se = 右下角
+        
+        ttk.Button(btn_container, text="修改配置...", width=12,
+                command=self._open_config_dialog).pack(anchor="se", side="bottom")
+        
+        # 设置网格权重
+        main_container.grid_columnconfigure(0, weight=1)  # 信息区域扩展
+        main_container.grid_columnconfigure(1, weight=0)  # 按钮区域不扩展
+        main_container.grid_rowconfigure(0, weight=1)     # 行扩展
+        
+        # 保留隐藏的输入框（兼容其他方法引用）
+        self.repo_entry_advanced = ttk.Entry(frame)
+        self.repo_entry_advanced.insert(0, self.repo_path)
+        self.api_entry_advanced = ttk.Entry(frame)
         if self.actual_api_address:
             self.api_entry_advanced.insert(0, self.actual_api_address)
-        ttk.Button(api_frame, text="应用此API", command=self.set_api_from_ui).pack(side="right")
-        ttk.Label(frame, text="此地址为仓库所对应的 IPFS API 地址, 修改仓库地址时会自动获取, 也可以自行设置服务器api").pack(anchor="w")
-        
-        # 代理设置
-        ttk.Label(frame, text="6. 代理设置 (用于特定网关测速):").pack(anchor="w", pady=(5, 0))
-        proxy_frame = ttk.Frame(frame)
-        proxy_frame.pack(fill="x", pady=2)
-        self.proxy_entry_advanced = ttk.Entry(proxy_frame)
-        self.proxy_entry_advanced.pack(side="left", fill="x", expand=True)
+        self.proxy_entry_advanced = ttk.Entry(frame)
         if self.proxy:
             self.proxy_entry_advanced.insert(0, self.proxy)
-        ttk.Button(proxy_frame, text="应用此代理", command=self.set_proxy_from_ui).pack(side="right")
-        ttk.Label(frame, text="示例: http://127.0.0.1:7879 或 socks5://127.0.0.1:1080 根据自己的代理端口进行设置").pack(anchor="w")
-        
-        # 复选框
-        self._create_config_checkboxes(frame)
 
-    def _create_config_checkboxes(self, parent):
-        """创建配置复选框"""
-        cb_frame = ttk.Frame(parent)
-        cb_frame.pack(anchor="w", pady=(5, 5))
+    def _create_tool_buttons_section(self, parent):
+        """创建工具按钮区域（原右侧底部按钮）"""
+        frame = ttk.LabelFrame(parent, text="TOOLs 快捷工具", style='BigTitle.TLabelframe')
+        frame.pack(fill="x", padx=20, pady=(5, 10))
         
-        ttk.Checkbutton(cb_frame, text="导入后固定在本地(可能会降低运行速度)", 
-                    variable=self.pin_var).grid(row=0, column=0, padx=5)
-        ttk.Checkbutton(cb_frame, text="关闭时最小化到任务栏", 
-                    variable=self.minimize_to_tray, 
-                    command=self.update_minimize_to_tray).grid(row=0, column=1, padx=5)
-        ttk.Checkbutton(cb_frame, text="自动更新kubo", # 勾选后程序启动时会检测kubo更新，如果网速慢可能会卡一会
-                    variable=self.auto_update_kubo, 
-                    command=self.update_auto_update_kubo).grid(row=0, column=2, padx=5)
+        btn_container = ttk.Frame(frame)
+        btn_container.pack(fill="x", padx=10, pady=10)
         
-        ttk.Checkbutton(cb_frame, text="启用下载链接生成器的网关负载均衡功能", 
-                    variable=self.enable_balancer_var).grid(row=1, column=0, columnspan=3, padx=5, pady=(5, 0), sticky="w")
+        # 第一排：核心工具
+        row1 = ttk.Frame(btn_container)
+        row1.pack(fill="x", pady=(0, 8))
         
-        ttk.Checkbutton(cb_frame, text="默认使用简洁模式", 
-                    variable=self.default_simple_mode,
-                    command=self.update_default_simple_mode).grid(row=1, column=1, columnspan=3, padx=5, pady=(5, 0), sticky="w")
+        self.webui_button_advanced = ttk.Button(row1, text="WebUI", command=self.open_webui, width=11)
+        self.webui_button_advanced.pack(side="left", padx=(0, 5))
+        
+        self.gc_button = ttk.Button(row1, text="执行 GC", command=self.start_gc, width=11)
+        self.gc_button.pack(side="left", padx=(0, 5))
+        
+        self.clear_button_advanced = ttk.Button(row1, text="程序复位", command=self.clear_window, width=11)
+        self.clear_button_advanced.pack(side="left", padx=(0, 5))
+        
+        self.plugin_launcher_button = ttk.Button(row1, text="插件启动器", command=self.open_plugin_launcher, width=11)
+        self.plugin_launcher_button.pack(side="left")
+        
+        # 第二排：托管服务
+        row2 = ttk.Frame(btn_container)
+        row2.pack(fill="x")
+        
+        self.crust_pinner_button = ttk.Button(row2, text="Crust", command=self.open_crust_pinner, width=11)
+        self.crust_pinner_button.pack(side="left", padx=(0, 5))
+        
+        self.aleph_manager_button_advanced = ttk.Button(row2, text="Aleph", command=self.open_aleph_manager, width=11)
+        self.aleph_manager_button_advanced.pack(side="left", padx=(0, 5))
+        
+        self.filecoin_button_advanced = ttk.Button(row2, text="Filecoin", command=self.open_filecoin_uploader, width=11)
+        self.filecoin_button_advanced.pack(side="left")
 
     def create_right_widgets(self):
         """创建右侧面板"""
         outer_frame, scrollable_frame = self._create_smart_scrollable_frame(self.right_frame)
         outer_frame.pack(fill="both", expand=True)
         
-        # 顶部：模式切换按钮
+        # 顶部：模式切换按钮（GitHub 链接已移至菜单）
         top_frame = ttk.Frame(scrollable_frame)
         top_frame.pack(fill="x", padx=20, pady=(10, 0))
         
         self.mode_toggle_button_advanced = ttk.Button(
             top_frame,
-            text="切换到简洁模式",
+            text="切换到简洁模式 (Ctrl+Q)",
             command=self.toggle_mode,
-            width=20
+            width=22
         )
         self.mode_toggle_button_advanced.pack(side="right")
-        
-        # GitHub链接
-        github_link = ttk.Label(top_frame, text="访问本程序 Github", foreground="blue", cursor="hand2")
-        github_link.pack(side="right", padx=(0, 10))
-        github_link.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/cenglin123/IPFS-ShareAssistant"))
-        github_link.bind("<Enter>", lambda e: github_link.config(foreground="purple"))
-        github_link.bind("<Leave>", lambda e: github_link.config(foreground="blue"))
         
         # 下载链接生成器
         self._create_links_section(scrollable_frame)
         
         # CID计算器
         self._create_cid_calculator_section(scrollable_frame)
-        
-        # 底部按钮
-        self._create_bottom_buttons(scrollable_frame)
 
     def _create_links_section(self, parent):
         """创建下载链接生成器区域"""
@@ -661,7 +1031,7 @@ class IPFSApp:
         ttk.Label(frame, text="输入需要计算CID的文件/文件夹路径或v0格式CID").pack(anchor="w")
         
         # 输入框
-        cid_input_frame, self.cid_input_text_advanced = self._create_scrolled_text(frame, height=7)
+        cid_input_frame, self.cid_input_text_advanced = self._create_scrolled_text(frame, height=6)
         cid_input_frame.pack(fill="x", pady=2)
         self.cid_input_text_advanced.drop_target_register(DND_FILES)
         self.cid_input_text_advanced.dnd_bind('<<Drop>>', self.drop_on_cid_calculator)
@@ -692,7 +1062,7 @@ class IPFSApp:
         self._create_cid_calc_buttons(frame)
         
         # 输出框
-        cid_output_frame, self.cid_output_text_advanced = self._create_scrolled_text(frame, height=7)
+        cid_output_frame, self.cid_output_text_advanced = self._create_scrolled_text(frame, height=6)
         cid_output_frame.pack(fill="x", pady=2)
         
         # 状态栏
@@ -723,35 +1093,9 @@ class IPFSApp:
         self.reset_cid_calc_button_gui.pack(side="left", padx=2, pady=5)
 
     def _create_bottom_buttons(self, parent):
-        """创建底部按钮区域"""
-        button_frame = ttk.Frame(parent)
-        button_frame.pack(pady=5)
-        
-        # 第一排按钮
-        button_row = ttk.Frame(button_frame)
-        button_row.pack(fill="x")
-        
-        self.plugin_launcher_button = ttk.Button(button_row, text="插件启动器", command=self.open_plugin_launcher, width=9)
-        self.plugin_launcher_button.pack(side="left", padx=2)
-        
-        self.webui_button_advanced = ttk.Button(button_row, text="WebUI", command=self.open_webui, width=9)
-        self.webui_button_advanced.pack(side="left", padx=2)
-        
-        self.gc_button = ttk.Button(button_row, text="执行GC", command=self.start_gc, width=9)
-        self.gc_button.pack(side="left", padx=2)
-        
-        self.clear_button_bottom = ttk.Button(button_row, text="程序复位", command=self.clear_window, width=9)
-        self.clear_button_bottom.pack(side="left", padx=2)
-
-        # Crust/Aleph/Filecoin 放在同一排，宽度略缩
-        self.crust_pinner_button = ttk.Button(button_row, text="Crust", command=self.open_crust_pinner, width=8)
-        self.crust_pinner_button.pack(side="left", padx=2)
-
-        self.aleph_manager_button_advanced  = ttk.Button(button_row, text="Aleph", command=self.open_aleph_manager, width=8)
-        self.aleph_manager_button_advanced.pack(side="left", padx=2)
-
-        self.filecoin_button_advanced = ttk.Button(button_row, text="Filecoin", command=self.open_filecoin_uploader, width=8)
-        self.filecoin_button_advanced.pack(side="left", padx=2)
+        """底部按钮（已移至左侧工具区，此方法保留为空以兼容简洁模式）"""
+        # 高级模式不再使用此方法，按钮已移至 _create_tool_buttons_section
+        pass
 
     def _create_status_bar(self):
         """创建状态栏"""
@@ -784,24 +1128,17 @@ class IPFSApp:
         main_container.grid_rowconfigure(2, weight=55)  # 链接生成器区域占55%
         main_container.grid_columnconfigure(0, weight=1)
         
-        # 顶部：模式切换按钮和GitHub链接
+        # 顶部：模式切换按钮
         top_frame = ttk.Frame(main_container)
         top_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(5, 10))
         
         self.mode_toggle_button_simple = ttk.Button(
             top_frame,
-            text="切换到高级模式",
+            text="切换到高级模式 (Ctrl+Q)",
             command=self.toggle_mode,
-            width=20
+            width=22
         )
         self.mode_toggle_button_simple.pack(side="right")
-        
-        # GitHub链接
-        github_link = ttk.Label(top_frame, text="访问本程序 Github", foreground="blue", cursor="hand2")
-        github_link.pack(side="right", padx=(0, 10))
-        github_link.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/cenglin123/IPFS-ShareAssistant"))
-        github_link.bind("<Enter>", lambda e: github_link.config(foreground="purple"))
-        github_link.bind("<Leave>", lambda e: github_link.config(foreground="blue"))
         
         # ==================== CID 计算器区域 ====================
         cid_calc_frame = ttk.LabelFrame(
@@ -833,40 +1170,39 @@ class IPFSApp:
         version_frame.grid(row=2, column=0, sticky="w", padx=10, pady=3)
         ttk.Label(version_frame, text="CID版本:").pack(side="left", padx=(0, 5))
         self.cid_version_dropdown_simple = ttk.Combobox(version_frame, textvariable=self.cid_version_text, 
-                                                       values=["CID v0", "CID v1", "file -> v0 -> v1", "file -> v1 -> v0"],
-                                                       state="readonly", width=20)
+                                                    values=["CID v0", "CID v1", "file -> v0 -> v1", "file -> v1 -> v0"],
+                                                    state="readonly", width=20)
         self.cid_version_dropdown_simple.pack(side="left")
-        self.cid_version_dropdown_simple.current(1)  # 默认选择CID v1
-        # 绑定下拉菜单选择事件，转换为整数
+        self.cid_version_dropdown_simple.current(1)
         self.cid_version_dropdown_simple.bind("<<ComboboxSelected>>", self.on_cid_version_changed)
         
         # Filecoin选项
         filecoin_frame = ttk.Frame(cid_calc_frame)
         filecoin_frame.grid(row=2, column=0, sticky="e", padx=10, pady=3)
         ttk.Checkbutton(filecoin_frame, text="使用Filecoin参数 (chunker=size-1048576)", 
-                       variable=self.use_filecoin, command=self.update_filecoin_config).pack(side="left")
+                    variable=self.use_filecoin, command=self.update_filecoin_config).pack(side="left")
         
-        # 简洁模式按钮组
+        # 简洁模式按钮组（保留所有重要功能）
         calc_button_frame = ttk.Frame(cid_calc_frame)
         calc_button_frame.grid(row=3, column=0, sticky="w", padx=10, pady=3)
         
-        self.cid_calc_button_gui_simple = ttk.Button(calc_button_frame, text="计算CID", command=self.calculate_cid_gui, width=9)
+        self.cid_calc_button_gui_simple = ttk.Button(calc_button_frame, text="计算 CID", command=self.calculate_cid_gui, width=9)
         self.cid_calc_button_gui_simple.pack(side="left", padx=2)
         
-        self.copy_cid_button = ttk.Button(calc_button_frame, text="复制CID", command=self.copy_cids, width=9)
+        self.copy_cid_button = ttk.Button(calc_button_frame, text="复制 CID", command=self.copy_cids, width=9)
         self.copy_cid_button.pack(side="left", padx=2)
 
-        self.webui_button_advanced = ttk.Button(calc_button_frame, text="WebUI", command=self.open_webui, width=9)
-        self.webui_button_advanced.pack(side="left", padx=2)
+        self.webui_button_simple = ttk.Button(calc_button_frame, text="WebUI", command=self.open_webui, width=9)
+        self.webui_button_simple.pack(side="left", padx=2)
 
-        self.aleph_manager_button_simple  = ttk.Button(calc_button_frame, text="Aleph", command=self.open_aleph_manager, width=9)
+        self.aleph_manager_button_simple = ttk.Button(calc_button_frame, text="Aleph", command=self.open_aleph_manager, width=9)
         self.aleph_manager_button_simple.pack(side="left", padx=2)
 
         self.filecoin_button_simple = ttk.Button(calc_button_frame, text="Filecoin", command=self.open_filecoin_uploader, width=9)
         self.filecoin_button_simple.pack(side="left", padx=2)
 
-        self.reset_cid_calc_button_gui = ttk.Button(calc_button_frame, text="重置计算器", command=self.clear_cid_calculator_gui, width=9)
-        self.reset_cid_calc_button_gui.pack(side="left", padx=2)
+        self.reset_cid_calc_button_gui_simple = ttk.Button(calc_button_frame, text="重置", command=self.clear_cid_calculator_gui, width=9)
+        self.reset_cid_calc_button_gui_simple.pack(side="left", padx=2)
         
         # CID 输出框（带内嵌标签）
         output_label_frame = ttk.Frame(cid_calc_frame)
@@ -910,24 +1246,23 @@ class IPFSApp:
         )
         self.gateway_dropdown_simple.grid(row=0, column=1, sticky="ew")
         
-        # 按钮组
+        # 按钮组（平铺所有重要功能）
         links_button_frame = ttk.Frame(links_frame)
         links_button_frame.grid(row=1, column=0, sticky="w", padx=10, pady=5)
 
-        row1 = ttk.Frame(links_button_frame)
-        row1.pack(anchor="w")
-        self.generate_links_button = ttk.Button(row1, text="生成下载链接", command=self.generate_links_simple, width=15)
+        self.generate_links_button = ttk.Button(links_button_frame, text="生成下载链接", command=self.generate_links_simple, width=11)
         self.generate_links_button.pack(side="left", padx=2, pady=2)
-        self.copy_links_button = ttk.Button(row1, text="复制链接", command=self.copy_links, width=15)
+        
+        self.copy_links_button = ttk.Button(links_button_frame, text="复制下载链接", command=self.copy_links, width=11)
         self.copy_links_button.pack(side="left", padx=2, pady=2)
-        self.speed_test_button_simple = ttk.Button(row1, text="网关测速", command=self.start_speed_test_simple, width=15)
+        
+        self.speed_test_button_simple = ttk.Button(links_button_frame, text="CID网关测速", command=self.start_speed_test_simple, width=11)
         self.speed_test_button_simple.pack(side="left", padx=2, pady=2)
-        self.clear_links_button = ttk.Button(row1, text="重新加载网关", command=self.clear_links, width=15)
+        
+        self.clear_links_button = ttk.Button(links_button_frame, text="重新加载网关", command=self.clear_links, width=11)
         self.clear_links_button.pack(side="left", padx=2, pady=2)
-
-        row2 = ttk.Frame(links_button_frame)
-        row2.pack(anchor="w")
-        self.plugin_launcher_button_simple = ttk.Button(row2, text="插件启动器", command=self.open_plugin_launcher, width=15)
+        
+        self.plugin_launcher_button_simple = ttk.Button(links_button_frame, text="插件启动器", command=self.open_plugin_launcher, width=11)
         self.plugin_launcher_button_simple.pack(side="left", padx=2, pady=2)
         
         # 进度条
@@ -936,12 +1271,12 @@ class IPFSApp:
             orient="horizontal",
             mode="determinate"
         )
-        self.progress_bar_simple.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
+        self.progress_bar_simple.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
         self.progress_bar_simple['value'] = 0
         
         # 下载链接输出框（带内嵌标签）
         links_output_label_frame = ttk.Frame(links_frame)
-        links_output_label_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=(5, 5))
+        links_output_label_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=(5, 10))
         links_output_label_frame.grid_rowconfigure(1, weight=1)
         links_output_label_frame.grid_columnconfigure(0, weight=1)
         
@@ -1201,7 +1536,7 @@ class IPFSApp:
         
         # 更新窗口标题
         mode_text = " - 简洁模式" if self.simple_mode else ""
-        self.root.title(f"IPFS 分享助手 v1.2.3-20251204 by 层林尽染{mode_text}")
+        self.root.title(f"IPFS 分享助手 v1.2.4-20251221 by 层林尽染{mode_text}")
 
         # 先解绑所有全局鼠标滚轮事件
         try:
@@ -1277,8 +1612,8 @@ class IPFSApp:
         screen_height = self.root.winfo_screenheight()
 
         # 计算高级模式的基础尺寸 (作为参照)
-        ADVANCED_WIDTH = int(screen_width * 0.62)
-        ADVANCED_HEIGHT = int(screen_height * 0.750)
+        ADVANCED_WIDTH = int(screen_width * 0.60)
+        ADVANCED_HEIGHT = int(screen_height * 0.71)
         
         # 根据模式计算尺寸
         if self.simple_mode:
@@ -1287,7 +1622,7 @@ class IPFSApp:
             window_height = int(ADVANCED_HEIGHT * SIMPLE_SCALE_FACTOR)
             
             # 确保窗口不会小于设定的最小尺寸
-            min_w, min_h = 620, 700
+            min_w, min_h = 600, 750
             window_width = max(window_width, min_w)
             window_height = max(window_height, min_h)
             self.logger.info( f"Calculated simple mode size: {window_width}x{window_height}" )
@@ -1307,9 +1642,9 @@ class IPFSApp:
         
         # 重新设置最小尺寸
         if self.simple_mode:
-            self.root.minsize(620, 800)
+            self.root.minsize(600, 750)
         else:
-            self.root.minsize(1210, 842)
+            self.root.minsize(1100, 700)
             
         self.logger.info(f"Applied geometry: {window_width}x{window_height} for {'simple' if self.simple_mode else 'advanced'} mode")
         
@@ -1323,7 +1658,7 @@ class IPFSApp:
             self.root.update_idletasks()  # 确保布局已更新
             paned_width = self.paned_window.winfo_width()
             if paned_width > 1:  # 确保已正确获取宽度
-                target_pos = int(paned_width * 0.51)
+                target_pos = int(paned_width * 0.50)
                 self.paned_window.sashpos(0, target_pos)
                 self.logger.info(f"Set paned window sash position: {target_pos}/{paned_width}")
             else:
@@ -2028,28 +2363,29 @@ class IPFSApp:
             cid_version = 1
         else:
             cid_version = self.cid_version.get()
-        
+
+        # --only-hash 模式不需要守护进程或网络访问，添加 --offline 避免加载 MFS
         cmd = [
-            self.kubo.kubo_path, "add", "--only-hash", "-Q",
+            self.kubo.kubo_path, "add", "--only-hash", "-Q", "--offline",
             f"--cid-version={cid_version}",
             "--repo-dir", self.repo_path
         ]
-        
+
         # 根据Filecoin选项设置chunker参数
         if self.use_filecoin.get():
             chunker_size = "size-1048576"  # 1MB (Filecoin专用)
         else:
             chunker_size = "size-262144"   # 256KB (默认)
-        
+
         cmd.extend(["--chunker", chunker_size])
-        
+
         # 记录参数配置日志
         self.logger.info(f"CID计算参数: filecoin={self.use_filecoin.get()}, chunker={chunker_size}, cid_version={cid_version}")
-        
+
         if os.path.isdir(filepath):
             cmd.append("-r")
         cmd.append(filepath)
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True, **subprocess_args)
         if result.returncode == 0:
             return result.stdout.strip()
@@ -2160,16 +2496,16 @@ class IPFSApp:
                         cid = self._add_to_ipfs(item, idx, total, base_cmd, subprocess_args)
                     else:
                         cid = item
-                    
+
                     # 复制到MFS
-                    status = self._copy_to_mfs(cid, dest_path, idx, total, base_cmd, subprocess_args, 
+                    status = self._copy_to_mfs(cid, dest_path, idx, total, base_cmd, subprocess_args,
                                               is_cid=not os.path.exists(item))
-                    
+
                     if status == "exists":
                         stats['skipped'] += 1
                     elif status == "success":
                         stats['success'] += 1
-                        
+
                         # 固定
                         if self.pin_var.get():
                             if self._pin_cid(cid, idx, total, base_cmd, subprocess_args):
@@ -2274,15 +2610,15 @@ class IPFSApp:
         """固定CID"""
         if self.stop_import:
             return False
-        
+
         self.update_status_label(f"正在固定 ({idx}/{total}): {cid}")
         pin_cmd = base_cmd + ["pin", "add", cid]
-        
+
         result = subprocess.run(
             pin_cmd, capture_output=True, text=True,
             timeout=60, **subprocess_args
         )
-        
+
         return result.returncode == 0
 
     def _show_import_results(self, stats):
@@ -2563,20 +2899,19 @@ class IPFSApp:
         """执行垃圾回收"""
         success = False
         unpinned = freed = 0
+        error_message = None
+        
         try:
             cleaner = IPFSCleaner(
                 ipfs_path=self.kubo.kubo_path,
                 repo_path=self.repo_path,
                 logger=self.logger
             )
-
             success, unpinned, freed = cleaner.clean_all(self.update_status_label)
+            
         except Exception as e:
+            error_message = str(e)
             self.logger.error(f"GC error: {e}")
-            self._call_ui(lambda: messagebox.showerror("错误", f"清理失败：{e}"))
-            self.update_status_label("清理失败")
-            self._call_ui(lambda: self.gc_button.config(state=tk.NORMAL))
-            return
 
         def finish_ui():
             try:
@@ -2587,15 +2922,91 @@ class IPFSApp:
                         msg = f"垃圾回收完成！\n没有固定对象\n释放空间: {IPFSCleaner.format_size(freed)}"
                     messagebox.showinfo("完成", msg)
                 else:
-                    raise Exception("清理过程发生错误，请检查 IPFS 仓库是否可用。")
+                    # 解析具体错误原因
+                    friendly_msg = self._parse_ipfs_error(error_message)
+                    messagebox.showerror("清理失败", friendly_msg)
             except Exception as e:
-                self.logger.error(f"GC error: {e}")
+                self.logger.error(f"GC finish error: {e}")
                 messagebox.showerror("错误", f"清理失败：{e}")
             finally:
                 self.gc_button.config(state=tk.NORMAL)
-                self.update_status_label("清理完成")
+                self.update_status_label("清理完成" if success else "清理失败")
 
         self._call_ui(finish_ui)
+
+    def _parse_ipfs_error(self, error_message: str) -> str:
+        """解析 IPFS 错误信息，返回用户友好的提示"""
+        if not error_message:
+            error_message = ""
+        
+        error_lower = error_message.lower()
+        
+        # 仓库被锁定
+        if "lock" in error_lower and ("someone else has the lock" in error_lower or "repo.lock" in error_lower):
+            return (
+                "IPFS 仓库被锁定！\n\n"
+                "可能的原因：\n"
+                "• 另一个 IPFS 进程正在运行（如 IPFS Desktop）\n"
+                "• 上次程序异常退出，锁文件未释放\n\n"
+                "解决方法：\n"
+                "1. 关闭其他正在使用此仓库的 IPFS 程序\n"
+                "2. 或手动删除锁文件：\n"
+                f"   {self.repo_path}\\repo.lock"
+            )
+        
+        # 仓库不存在或损坏
+        if "no ipfs repo found" in error_lower or "not initialized" in error_lower:
+            return (
+                "IPFS 仓库未找到或未初始化！\n\n"
+                f"当前仓库路径: {self.repo_path}\n\n"
+                "请检查：\n"
+                "• 仓库路径是否正确\n"
+                "• 是否需要先运行 ipfs init"
+            )
+        
+        # 权限问题
+        if "permission denied" in error_lower or "access" in error_lower:
+            return (
+                "没有权限访问 IPFS 仓库！\n\n"
+                f"仓库路径: {self.repo_path}\n\n"
+                "请检查：\n"
+                "• 当前用户是否有读写权限\n"
+                "• 仓库目录是否被其他程序占用"
+            )
+        
+        # 磁盘空间不足
+        if "no space" in error_lower or "disk full" in error_lower:
+            return (
+                "磁盘空间不足！\n\n"
+                "请清理磁盘空间后重试。"
+            )
+        
+        # API 连接失败
+        if "connection refused" in error_lower or "cannot connect" in error_lower:
+            return (
+                "无法连接到 IPFS API！\n\n"
+                f"API 地址: {self.actual_api_address}\n\n"
+                "请检查：\n"
+                "• IPFS 守护进程是否正在运行\n"
+                "• API 地址是否正确"
+            )
+        
+        # 超时
+        if "timeout" in error_lower:
+            return (
+                "操作超时！\n\n"
+                "可能原因：\n"
+                "• 仓库数据量过大\n"
+                "• 系统资源不足\n\n"
+                "请稍后重试。"
+            )
+        
+        # 默认错误信息
+        return (
+            f"清理过程发生错误\n\n"
+            f"错误详情：\n{error_message or '未知错误'}\n\n"
+            f"仓库路径: {self.repo_path}"
+        )
 
     def open_plugin_launcher(self):
         """插件启动器：列出 plugins 目录下的脚本并支持后台启动"""
@@ -3096,7 +3507,7 @@ class IPFSApp:
         """显示托盘图标"""
         if self.tray_icon:
             nid = (self.hwnd, 0, win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP,
-                   self.WM_TASKBAR, self.tray_icon, "IPFS分享助手 v1.2.3-20251204")
+                   self.WM_TASKBAR, self.tray_icon, "IPFS分享助手 v1.2.4-20251221")
             try:
                 win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, nid)
             except pywintypes.error as e:
@@ -3156,6 +3567,13 @@ class IPFSApp:
     def exit_application(self):
         """退出应用"""
         self.logger.info("Exiting application")
+
+        # 优雅终止 Filecoin 上传子进程
+        try:
+            if getattr(self, "filecoin_uploader", None):
+                self.filecoin_uploader.shutdown(timeout=6.0)
+        except Exception as e:
+            self.logger.error(f"Error stopping Filecoin uploader: {e}")
         
         # 安全保存配置
         try:

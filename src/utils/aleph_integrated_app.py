@@ -515,7 +515,8 @@ class CIDCalculator:
 
     def _calc_file(self, path, ver):
         self._ensure_repo_initialized()
-        cmd = [self.ipfs_path, "add", "--only-hash", "-Q", "--repo-dir", self.repo_dir, f"--cid-version={ver}"]
+        # --only-hash 模式不需要守护进程或网络访问，添加 --offline 避免加载 MFS
+        cmd = [self.ipfs_path, "add", "--only-hash", "-Q", "--offline", f"--cid-version={ver}", "--repo-dir", self.repo_dir]
         if os.path.isdir(path): cmd.append("-r")
         cmd.extend(["--chunker", Constants.CHUNKER_FILECOIN if self.use_filecoin.get() else Constants.CHUNKER_DEFAULT, path])
         p = SubprocessHelper.popen_command(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False)
@@ -619,7 +620,8 @@ class AlephManager:
                 first_run = False
             except Exception as e:
                 self.logger.error(f"节点巡检异常: {e}")
-            time.sleep(300)
+            # 增加检查间隔到30分钟，避免频繁检查阻塞其他操作
+            time.sleep(1800)
 
     def _optimize_nodes_task(self, is_first_run=False):
         """
