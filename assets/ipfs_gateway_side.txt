@@ -709,3 +709,4 @@ https://ipfs.bws.ninja
 https://ipfs.algonode.xyz
 https://172.245.184.229
 https://213.95.21.157
+https://gateway.crustgateway.com

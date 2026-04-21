@@ -14,6 +14,7 @@ import hashlib
 import re
 import math
 import queue
+import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.config_utils import load_config_file, save_config_file
@@ -1244,6 +1245,9 @@ class FilecoinPinUploader:
         """带重试的上传逻辑，包含网络自动切换功能"""
         original_network = self.network_var.get()
         network_switched = False
+        testnet_error_count = 0
+        forced_provider_id = None
+        last_provider_id = None
         
         # 如果是测试网，先检查是否有历史失败记录
         if original_network == "calibration":
@@ -1263,9 +1267,16 @@ class FilecoinPinUploader:
             current_network = self.network_var.get()
             provider_ids = self._get_provider_ids(current_network)
             provider_id = None
-            if attempt > 1 and provider_ids:
+            if forced_provider_id is not None:
+                provider_id = forced_provider_id
+                self._log_part(idx, f"切换存储提供商 provider-id={provider_id}", slot)
+                forced_provider_id = None
+            elif attempt > 1 and provider_ids:
                 provider_id = provider_ids[(attempt - 2) % len(provider_ids)]
                 self._log_part(idx, f"切换存储提供商 provider-id={provider_id}", slot)
+
+            if provider_id is not None:
+                last_provider_id = provider_id
 
             success, output = self._upload_car(car_path, private_key, idx, total, slot, provider_id=provider_id)
             
@@ -1320,13 +1331,24 @@ class FilecoinPinUploader:
                     if "nonce has already been used" in combined_output or "nonce 15 already in mpool" in combined_output:
                         is_nonce_error = True
             
-            # 如果是测试网错误且当前是测试网，尝试切换到主网
+            # 测试网错误：先随机切换测试网提供商，最多 2 次，再切主网
             if (is_testnet_error or is_connection_error) and original_network == "calibration" and not network_switched:
-                self._log_part(idx, f"检测到测试网服务问题（错误类型：{'连接超时' if is_connection_error else '服务提供商不可用'}），尝试切换到主网（mainnet）", slot)
+                testnet_error_count += 1
+                if testnet_error_count <= 2:
+                    testnet_providers = self._get_provider_ids("calibration")
+                    if testnet_providers:
+                        candidates = [pid for pid in testnet_providers if pid != last_provider_id]
+                        if not candidates:
+                            candidates = testnet_providers
+                        forced_provider_id = random.choice(candidates)
+                        self._log_part(idx, f"测试网错误，随机切换提供商 provider-id={forced_provider_id}（{testnet_error_count}/2）", slot)
+                        # 进入下一次重试
+                        continue
+                self._log_part(idx, f"测试网连续错误 {testnet_error_count} 次，切换到主网（mainnet）", slot)
                 self.network_var.set("mainnet")
                 self._save_network_settings()
                 network_switched = True
-                self._append_log(f"已自动切换网络：calibration → mainnet")
+                self._append_log("已自动切换网络：calibration → mainnet")
                 # 切换网络后立即重试
                 continue
             

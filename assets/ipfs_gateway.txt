@@ -41,7 +41,6 @@ https://ipfs.interface.social
 https://ipfs.raribleuserdata.com
 https://gateway.pinata.cloud
 https://gw.w3ipfs.org.cn
-https://gateway.crustgateway.com
 https://gateway.crust.fans
 https://gw.smallwolf.me
 https://ipfs-us1.apillon.io
